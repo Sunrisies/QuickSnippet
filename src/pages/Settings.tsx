@@ -69,7 +69,7 @@ export default function Settings({ onBack }: Props) {
       )}
 
       <div className="settings-footer">
-        <p>Scripter v0.1.0 &middot; 基于 Tauri + Rust</p>
+        <p>Scripter v0.1.1 &middot; 基于 Tauri + Rust</p>
       </div>
     </div>
   );
