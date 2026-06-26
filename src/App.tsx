@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { PageView } from "./types";
 import ScriptList from "./pages/ScriptList";
@@ -12,7 +12,7 @@ function App() {
   const [editId, setEditId] = useState<string | null>(null);
   const [qlOpen, setQlOpen] = useState(false);
 
-  // 来自 Rust 全局快捷键的事件
+  // 来自 Rust 全局快捷键 Ctrl+P 的事件
   useEffect(() => {
     const unlisten = listen("toggle-quicklaunch", () => {
       setQlOpen(true);
@@ -22,21 +22,19 @@ function App() {
     };
   }, []);
 
-  // Ctrl+P / Ctrl+Shift+P 应用内打开快速启动
-  const handleGlobalKey = useCallback((e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "p") {
-      e.preventDefault();
-      setQlOpen((prev) => !prev);
-    }
-    if (e.key === "Escape") {
-      setQlOpen(false);
-    }
-  }, []);
-
+  // 仅阻止 WebView 的 Ctrl+P 打印行为 + Esc 关闭
   useEffect(() => {
-    window.addEventListener("keydown", handleGlobalKey);
-    return () => window.removeEventListener("keydown", handleGlobalKey);
-  }, [handleGlobalKey]);
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "p") {
+        e.preventDefault(); // 阻止打印对话框
+      }
+      if (e.key === "Escape") {
+        setQlOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const handleEditScript = (id: string | null) => {
     setEditId(id);
@@ -46,6 +44,11 @@ function App() {
   const handleBackToList = () => {
     setView("list");
   };
+
+  // QuickLaunch 打开时只显示浮层，隐藏主界面
+  if (qlOpen) {
+    return <QuickLaunch open={qlOpen} onClose={() => setQlOpen(false)} />;
+  }
 
   return (
     <div className="app-container">
@@ -78,7 +81,7 @@ function App() {
           >
             <span className="sidebar-icon">⏩</span>
             快速启动
-            <span className="ql-shortcut">Ctrl+Shift+P</span>
+            <span className="ql-shortcut">Ctrl+P</span>
           </button>
         </div>
       </nav>
@@ -91,9 +94,6 @@ function App() {
         )}
         {view === "settings" && <Settings onBack={handleBackToList} />}
       </main>
-
-      {/* ── 快速启动浮层 ── */}
-      <QuickLaunch open={qlOpen} onClose={() => setQlOpen(false)} />
     </div>
   );
 }

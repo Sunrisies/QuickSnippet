@@ -167,10 +167,10 @@ pub fn run() {
             // 将数据库实例注册为 Tauri 状态
             app.manage(database);
 
-            // 注册全局快捷键 Ctrl+Shift+P
+            // 注册全局快捷键 Ctrl+P
             #[cfg(desktop)]
             {
-                let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP);
+                let shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyP);
                 app.global_shortcut().register(shortcut).map_err(|e| {
                     eprintln!("[Scripter] 注册全局快捷键失败: {e}");
                     Box::<dyn std::error::Error>::from(e.to_string())

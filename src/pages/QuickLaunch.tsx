@@ -120,7 +120,7 @@ export default function QuickLaunch({ open, onClose }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <span className="ql-hint">Ctrl+Shift+P</span>
+          <span className="ql-hint">Ctrl+P</span>
         </div>
 
         {/* 结果列表 */}
