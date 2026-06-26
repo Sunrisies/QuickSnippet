@@ -4,7 +4,8 @@ mod executor;
 
 use db::{Database, Script};
 use executor::ExecutionResult;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 // ============ 注册表自启动 (Windows) ============
 
@@ -133,6 +134,19 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(move |app, _shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                        let _ = app.emit("toggle-quicklaunch", ());
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             // 获取应用数据目录，用于存放 SQLite 数据库
             let app_dir = app.path().app_data_dir().map_err(|e| {
@@ -152,6 +166,16 @@ pub fn run() {
 
             // 将数据库实例注册为 Tauri 状态
             app.manage(database);
+
+            // 注册全局快捷键 Ctrl+Shift+P
+            #[cfg(desktop)]
+            {
+                let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP);
+                app.global_shortcut().register(shortcut).map_err(|e| {
+                    eprintln!("[Scripter] 注册全局快捷键失败: {e}");
+                    Box::<dyn std::error::Error>::from(e.to_string())
+                })?;
+            }
 
             Ok(())
         })

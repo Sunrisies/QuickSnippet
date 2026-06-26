@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
 import type { PageView } from "./types";
 import ScriptList from "./pages/ScriptList";
 import ScriptEditor from "./pages/ScriptEditor";
@@ -11,7 +12,17 @@ function App() {
   const [editId, setEditId] = useState<string | null>(null);
   const [qlOpen, setQlOpen] = useState(false);
 
-  // Ctrl+P 打开快速启动
+  // 来自 Rust 全局快捷键的事件
+  useEffect(() => {
+    const unlisten = listen("toggle-quicklaunch", () => {
+      setQlOpen(true);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // Ctrl+P / Ctrl+Shift+P 应用内打开快速启动
   const handleGlobalKey = useCallback((e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "p") {
       e.preventDefault();
@@ -67,7 +78,7 @@ function App() {
           >
             <span className="sidebar-icon">⏩</span>
             快速启动
-            <span className="ql-shortcut">Ctrl+P</span>
+            <span className="ql-shortcut">Ctrl+Shift+P</span>
           </button>
         </div>
       </nav>
