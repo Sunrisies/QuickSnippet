@@ -5,8 +5,28 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Scripter</title>
+    <script>
+      // 全局错误捕获 — 白屏时显示错误信息
+      window.onerror = function (msg, url, line, col, err) {
+        const root = document.getElementById("root");
+        root.innerHTML =
+          '<div style="padding:40px;background:#1a1b1e;color:#e4e4e7;font-family:sans-serif;height:100vh">' +
+          '<h2 style="color:#ef4444">⚠️ 脚本错误</h2>' +
+          '<pre style="background:#25262b;padding:16px;border-radius:8px;margin-top:16px;color:#f87171;font-size:13px">' +
+          (err ? err.stack || err.message || msg : msg) +
+          "</pre></div>";
+        return true;
+      };
+      window.addEventListener("unhandledrejection", function (e) {
+        document.getElementById("root").innerHTML =
+          '<div style="padding:40px;background:#1a1b1e;color:#e4e4e7;font-family:sans-serif;height:100vh">' +
+          '<h2 style="color:#ef4444">⚠️ Promise 未处理错误</h2>' +
+          '<pre style="background:#25262b;padding:16px;border-radius:8px;margin-top:16px;color:#f87171;font-size:13px">' +
+          (e.reason?.stack || e.reason?.message || String(e.reason)) +
+          "</pre></div>";
+      });
+    </script>
   </head>
-
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

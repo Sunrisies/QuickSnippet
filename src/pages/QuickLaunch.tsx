@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import Fuse from "fuse.js";
 import type { Script } from "../types";
 
@@ -65,7 +64,7 @@ export default function QuickLaunch({ open, onClose }: Props) {
   const copyScript = useCallback(
     async (script: Script) => {
       try {
-        await writeText(script.content);
+        await invoke("copy_to_clipboard", { text: script.content });
         setCopiedId(script.id);
         setTimeout(() => onClose(), 400);
       } catch (e) {

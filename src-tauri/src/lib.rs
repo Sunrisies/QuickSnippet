@@ -24,8 +24,7 @@ fn set_registry_autostart(enabled: bool) -> Result<(), String> {
 
     if enabled {
         // 获取当前可执行文件路径
-        let exe_path = std::env::current_exe()
-            .unwrap_or_else(|_| PathBuf::from("Scripter.exe"));
+        let exe_path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("Scripter.exe"));
         let path_str = exe_path.to_string_lossy().to_string();
         run_key
             .set_value("Scripter", &path_str)
@@ -45,10 +44,7 @@ fn is_registry_autostart() -> Result<bool, String> {
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let run_key = hkcu
-        .open_subkey_with_flags(
-            r"Software\Microsoft\Windows\CurrentVersion\Run",
-            KEY_READ,
-        )
+        .open_subkey_with_flags(r"Software\Microsoft\Windows\CurrentVersion\Run", KEY_READ)
         .map_err(|e| format!("无法打开注册表 Run 键: {}", e))?;
 
     match run_key.get_value::<String, _>("Scripter") {
@@ -111,6 +107,11 @@ fn execute_script(content: String, language: String) -> Result<ExecutionResult, 
 }
 
 #[tauri::command]
+fn copy_to_clipboard(text: String) -> Result<(), String> {
+    clipboard_win::set_clipboard_string(&text).map_err(|e| format!("写入剪贴板失败: {}", e))
+}
+
+#[tauri::command]
 fn get_autostart(db: tauri::State<'_, Database>) -> Result<bool, String> {
     // 先读取注册表实际状态
     let reg_enabled = is_registry_autostart().unwrap_or(false);
@@ -120,10 +121,7 @@ fn get_autostart(db: tauri::State<'_, Database>) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn set_autostart(
-    db: tauri::State<'_, Database>,
-    enabled: bool,
-) -> Result<(), String> {
+fn set_autostart(db: tauri::State<'_, Database>, enabled: bool) -> Result<(), String> {
     // 通过注册表设置自启动
     set_registry_autostart(enabled)?;
     // 持久化偏好设置
@@ -133,17 +131,24 @@ fn set_autostart(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             // 获取应用数据目录，用于存放 SQLite 数据库
-            let app_dir = app
-                .path()
-                .app_data_dir()
-                .expect("无法获取应用数据目录");
+            let app_dir = app.path().app_data_dir().map_err(|e| {
+                eprintln!("[Scripter] 无法获取应用数据目录: {e}");
+                e
+            })?;
 
-            let database = Database::new(app_dir).expect("无法初始化数据库");
+            let database = Database::new(app_dir).map_err(|e| {
+                eprintln!("[Scripter] 无法初始化数据库: {e}");
+                Box::<dyn std::error::Error>::from(e)
+            })?;
+
+            // 首次运行时自动插入示例数据（仅当数据表为空）
+            // if let Err(e) = database.seed_demo_data() {
+            //     eprintln!("[Scripter] 插入示例数据失败: {e}");
+            // }
 
             // 将数据库实例注册为 Tauri 状态
             app.manage(database);
@@ -157,6 +162,7 @@ pub fn run() {
             get_script,
             list_scripts,
             execute_script,
+            copy_to_clipboard,
             get_autostart,
             set_autostart,
         ])
