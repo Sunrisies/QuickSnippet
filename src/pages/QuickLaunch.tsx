@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import Fuse from "fuse.js";
 import type { Script } from "../types";
+
+const appWindow = getCurrentWebviewWindow();
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  standalone?: boolean;
 }
 
-export default function QuickLaunch({ open, onClose }: Props) {
+export default function QuickLaunch({ open, onClose, standalone }: Props) {
   const [scripts, setScripts] = useState<Script[]>([]);
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -17,6 +21,15 @@ export default function QuickLaunch({ open, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // 关闭窗口（独立模式关闭 Tauri 窗口，嵌入模式调 onClose）
+  const dismiss = useCallback(() => {
+    if (standalone) {
+      appWindow.close().catch(console.error);
+    } else {
+      onClose();
+    }
+  }, [standalone, onClose]);
+
   // 打开时加载脚本列表
   useEffect(() => {
     if (open) {
@@ -24,7 +37,6 @@ export default function QuickLaunch({ open, onClose }: Props) {
       setQuery("");
       setSelectedIndex(0);
       setCopiedId(null);
-      // 自动聚焦
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
@@ -66,12 +78,12 @@ export default function QuickLaunch({ open, onClose }: Props) {
       try {
         await invoke("copy_to_clipboard", { text: script.content });
         setCopiedId(script.id);
-        setTimeout(() => onClose(), 400);
+        setTimeout(() => dismiss(), 400);
       } catch (e) {
         console.error("复制失败:", e);
       }
     },
-    [onClose],
+    [dismiss],
   );
 
   // 键盘事件
@@ -79,7 +91,7 @@ export default function QuickLaunch({ open, onClose }: Props) {
     (e: React.KeyboardEvent) => {
       switch (e.key) {
         case "Escape":
-          onClose();
+          dismiss();
           break;
         case "ArrowDown":
           e.preventDefault();
@@ -97,13 +109,13 @@ export default function QuickLaunch({ open, onClose }: Props) {
           break;
       }
     },
-    [onClose, results, selectedIndex, copyScript],
+    [dismiss, results, selectedIndex, copyScript],
   );
 
   if (!open) return null;
 
   return (
-    <div className="ql-overlay" onClick={onClose}>
+    <div className={`ql-overlay ${standalone ? "ql-standalone" : ""}`} onClick={dismiss}>
       <div
         className="ql-panel"
         onClick={(e) => e.stopPropagation()}

@@ -710,6 +710,15 @@ body,
   animation: ql-fadein 0.12s ease;
 }
 
+/* 独立窗口模式：无标题栏，纯黑背景 */
+.ql-standalone {
+  background: transparent;
+}
+
+.ql-standalone .ql-panel {
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
 @keyframes ql-fadein {
   from { opacity: 0; }
   to   { opacity: 1; }

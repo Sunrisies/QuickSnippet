@@ -29,4 +29,13 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  // 4. multi-page support: main + quicklaunch
+  build: {
+    rollupOptions: {
+      input: {
+        main: "index.html",
+        quicklaunch: "quicklaunch.html",
+      },
+    },
+  },
 }));

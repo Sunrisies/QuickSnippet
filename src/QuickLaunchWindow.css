@@ -1,0 +1,173 @@
+/* ═══════════════════════════════════════════════
+   QuickLaunch 独立窗口样式
+   ═══════════════════════════════════════════════ */
+
+.qlw-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #1e1f23;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* ── 输入框 ── */
+.qlw-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #2c2e33;
+}
+
+.qlw-search-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.qlw-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: #e4e4e7;
+  font-size: 16px;
+  outline: none;
+  font-family: inherit;
+}
+
+.qlw-input::placeholder {
+  color: #52525b;
+}
+
+.qlw-shortcut {
+  font-size: 11px;
+  color: #52525b;
+  background: #27282d;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* ── 结果列表 ── */
+.qlw-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 6px;
+  min-height: 0;
+}
+
+.qlw-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: #52525b;
+  font-size: 13px;
+}
+
+.qlw-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+  margin-bottom: 2px;
+  transition: background 0.1s;
+}
+
+.qlw-item:hover {
+  background: #2c2e33;
+}
+
+.qlw-item-active {
+  background: #6366f1 !important;
+}
+
+.qlw-item-active .qlw-item-name,
+.qlw-item-active .qlw-item-preview {
+  color: #fff;
+}
+
+.qlw-item-active .qlw-item-lang {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+.qlw-item-copied {
+  background: rgba(34, 197, 94, 0.15) !important;
+}
+
+.qlw-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.qlw-item-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e4e4e7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qlw-item-lang {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #fff;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.qlw-item-preview {
+  font-size: 12px;
+  color: #71717a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", monospace;
+}
+
+.qlw-item-check {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 600;
+  color: #22c55e;
+  animation: qlw-pop 0.2s ease;
+}
+
+@keyframes qlw-pop {
+  0%   { transform: translateY(-50%) scale(0.5); opacity: 0; }
+  70%  { transform: translateY(-50%) scale(1.1); }
+  100% { transform: translateY(-50%) scale(1);   opacity: 1; }
+}
+
+/* ── 底部提示 ── */
+.qlw-footer {
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px;
+  border-top: 1px solid #2c2e33;
+  font-size: 11px;
+  color: #52525b;
+}
+
+/* ── 滚动条 ── */
+.qlw-results::-webkit-scrollbar {
+  width: 6px;
+}
+
+.qlw-results::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.qlw-results::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 3px;
+}

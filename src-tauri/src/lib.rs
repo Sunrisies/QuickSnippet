@@ -4,7 +4,7 @@ mod executor;
 
 use db::{Database, Script};
 use executor::ExecutionResult;
-use tauri::{Emitter, Manager};
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 // ============ 注册表自启动 (Windows) ============
@@ -24,7 +24,6 @@ fn set_registry_autostart(enabled: bool) -> Result<(), String> {
         .map_err(|e| format!("无法打开注册表 Run 键: {}", e))?;
 
     if enabled {
-        // 获取当前可执行文件路径
         let exe_path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("Scripter.exe"));
         let path_str = exe_path.to_string_lossy().to_string();
         run_key
@@ -114,18 +113,14 @@ fn copy_to_clipboard(text: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_autostart(db: tauri::State<'_, Database>) -> Result<bool, String> {
-    // 先读取注册表实际状态
     let reg_enabled = is_registry_autostart().unwrap_or(false);
-    // 同步到数据库偏好
     let _ = autostart::set_autostart_preference(&db, reg_enabled);
     Ok(reg_enabled)
 }
 
 #[tauri::command]
 fn set_autostart(db: tauri::State<'_, Database>, enabled: bool) -> Result<(), String> {
-    // 通过注册表设置自启动
     set_registry_autostart(enabled)?;
-    // 持久化偏好设置
     autostart::set_autostart_preference(&db, enabled)
 }
 
@@ -138,11 +133,10 @@ pub fn run() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
-                        if let Some(window) = app.get_webview_window("main") {
+                        if let Some(window) = app.get_webview_window("quicklaunch") {
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
-                        let _ = app.emit("toggle-quicklaunch", ());
                     }
                 })
                 .build(),
@@ -159,11 +153,6 @@ pub fn run() {
                 Box::<dyn std::error::Error>::from(e)
             })?;
 
-            // 首次运行时自动插入示例数据（仅当数据表为空）
-            // if let Err(e) = database.seed_demo_data() {
-            //     eprintln!("[Scripter] 插入示例数据失败: {e}");
-            // }
-
             // 将数据库实例注册为 Tauri 状态
             app.manage(database);
 
@@ -176,6 +165,36 @@ pub fn run() {
                     Box::<dyn std::error::Error>::from(e.to_string())
                 })?;
             }
+
+            // 创建 QuickLaunch 独立窗口（默认隐藏）
+            let ql_window = WebviewWindowBuilder::new(
+                app,
+                "quicklaunch",
+                WebviewUrl::App("quicklaunch.html".into()),
+            )
+            .title("")
+            .inner_size(580.0, 480.0)
+            .center()
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .visible(false) // 默认隐藏
+            .build()
+            .map_err(|e| {
+                eprintln!("[Scripter] 创建 QuickLaunch 窗口失败: {e}");
+                Box::<dyn std::error::Error>::from(e.to_string())
+            })?;
+
+            // 失焦时自动隐藏
+            let app_handle = app.handle().clone();
+            ql_window.on_window_event(move |event| {
+                if let tauri::WindowEvent::Focused(false) = event {
+                    if let Some(w) = app_handle.get_webview_window("quicklaunch") {
+                        let _ = w.hide();
+                    }
+                }
+            });
 
             Ok(())
         })
