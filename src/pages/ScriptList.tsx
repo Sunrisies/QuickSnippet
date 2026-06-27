@@ -2,8 +2,12 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Fuse from "fuse.js";
 import type { Script, ExecutionResult } from "../types";
+import { LANGUAGES, LANG_STYLES } from "../types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import SyntaxHighlight from "@/components/SyntaxHighlight";
 
-// ---------- Search Hook ----------
 function useSearch(scripts: Script[], query: string) {
   const fuse = useMemo(
     () =>
@@ -17,56 +21,43 @@ function useSearch(scripts: Script[], query: string) {
       }),
     [scripts],
   );
-
   return useMemo(() => {
     if (!query.trim()) return scripts;
     return fuse.search(query).map((r) => r.item);
   }, [fuse, query, scripts]);
 }
 
-// ---------- Language Display ----------
-const LANG_LABELS: Record<string, string> = {
-  powershell: "PowerShell",
-  cmd: "CMD",
-  bash: "Bash",
-};
+const langLabel = (v: string) => LANGUAGES.find((l) => l.value === v)?.label || v;
 
-const LANG_COLORS: Record<string, string> = {
-  powershell: "var(--lang-powershell)",
-  cmd: "var(--lang-cmd)",
-  bash: "var(--lang-bash)",
-};
-
-// ---------- Component ----------
 interface Props {
-  onEditScript: (id: string | null) => void;
+  onEditSnippet: (id: string | null) => void;
 }
 
-export default function ScriptList({ onEditScript }: Props) {
-  const [scripts, setScripts] = useState<Script[]>([]);
+export default function ScriptList({ onEditSnippet }: Props) {
+  const [snippets, setSnippets] = useState<Script[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchScripts = useCallback(async () => {
+  const fetchSnippets = useCallback(async () => {
     try {
       const list = await invoke<Script[]>("list_scripts");
-      setScripts(list);
+      setSnippets(list);
     } catch (e) {
-      console.error("加载脚本列表失败:", e);
+      console.error("加载代码列表失败:", e);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchScripts();
-  }, [fetchScripts]);
+    fetchSnippets();
+  }, [fetchSnippets]);
 
-  const filtered = useSearch(scripts, searchQuery);
-  const selectedScript = scripts.find((s) => s.id === selectedId) ?? null;
+  const filtered = useSearch(snippets, searchQuery);
+  const selected = snippets.find((s) => s.id === selectedId) ?? null;
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -76,22 +67,33 @@ export default function ScriptList({ onEditScript }: Props) {
           setSelectedId(null);
           setResult(null);
         }
-        fetchScripts();
+        fetchSnippets();
       } catch (e) {
-        console.error("删除脚本失败:", e);
+        console.error("删除失败:", e);
       }
     },
-    [selectedId, fetchScripts],
+    [selectedId, fetchSnippets],
+  );
+
+  const handleCopy = useCallback(
+    async (content: string) => {
+      try {
+        await invoke("copy_to_clipboard", { text: content });
+      } catch (e) {
+        console.error("复制失败:", e);
+      }
+    },
+    [],
   );
 
   const handleExecute = useCallback(async () => {
-    if (!selectedScript) return;
+    if (!selected) return;
     setExecuting(true);
     setResult(null);
     try {
       const res = await invoke<ExecutionResult>("execute_script", {
-        content: selectedScript.content,
-        language: selectedScript.language,
+        content: selected.content,
+        language: selected.language,
       });
       setResult(res);
     } catch (e) {
@@ -104,168 +106,149 @@ export default function ScriptList({ onEditScript }: Props) {
     } finally {
       setExecuting(false);
     }
-  }, [selectedScript]);
-
-  const selected = selectedScript;
+  }, [selected]);
 
   return (
-    <div className="script-list-layout">
-      {/* ── 左侧：搜索 + 列表 ── */}
-      <div className="script-list-panel">
-        <div className="script-list-header">
-          <h2>脚本列表</h2>
-          <button className="btn btn-primary" onClick={() => onEditScript(null)}>
-            + 新建
-          </button>
+    <div className="flex h-full">
+      {/* ── 左侧列表 ── */}
+      <div className="w-80 shrink-0 border-r border-border flex flex-col">
+        <div className="flex items-center justify-between px-4 pt-4 pb-3">
+          <h2 className="text-sm font-semibold">代码片段</h2>
+          <Button size="sm" onClick={() => onEditSnippet(null)}>
+            + 新增
+          </Button>
         </div>
 
-        <div className="search-bar">
-          <input
-            type="text"
-            placeholder="搜索脚本名称或内容…"
+        <div className="px-3 pb-3">
+          <Input
+            placeholder="搜索代码…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            autoFocus
+            className="h-8 text-xs"
           />
-          {searchQuery && (
-            <span className="search-count">
-              {filtered.length}/{scripts.length}
-            </span>
-          )}
         </div>
 
-        <div className="script-cards">
+        <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
           {loading ? (
-            <div className="empty-state">加载中…</div>
+            <p className="text-xs text-muted-foreground text-center py-8">加载中…</p>
           ) : filtered.length === 0 ? (
-            <div className="empty-state">
-              {searchQuery ? "没有匹配的脚本" : "还没有脚本，点击上方新建"}
-            </div>
+            <p className="text-xs text-muted-foreground text-center py-8">
+              {searchQuery ? "没有匹配的代码" : "还没有代码片段，点击上方新增"}
+            </p>
           ) : (
             filtered.map((s) => (
               <div
                 key={s.id}
-                className={`script-card ${selectedId === s.id ? "active" : ""}`}
                 onClick={() => {
                   setSelectedId(s.id);
                   setResult(null);
                 }}
+                className={`rounded-md px-3 py-2 cursor-pointer transition-colors ${
+                  selectedId === s.id
+                    ? "bg-primary/10 border border-primary/30"
+                    : "hover:bg-muted border border-transparent"
+                }`}
               >
-                <div className="script-card-top">
-                  <span className="script-name">{s.name}</span>
-                  <span
-                    className="lang-badge"
-                    style={{
-                      backgroundColor: LANG_COLORS[s.language] || "var(--text-dim)",
-                    }}
-                  >
-                    {LANG_LABELS[s.language] || s.language}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium truncate flex-1">{s.name}</span>
+                  <Badge className={LANG_STYLES[s.language] || "bg-zinc-100 text-zinc-500"}>
+                    {langLabel(s.language)}
+                  </Badge>
                 </div>
-                <div className="script-card-preview">{s.content.slice(0, 80)}</div>
+                <p className="text-xs text-muted-foreground truncate mt-0.5 font-mono">
+                  {s.content.slice(0, 80)}
+                </p>
               </div>
             ))
           )}
         </div>
       </div>
 
-      {/* ── 右侧：详情 + 执行 ── */}
-      <div className="script-detail-panel">
+      {/* ── 右侧详情 ── */}
+      <div className="flex-1 flex flex-col p-5 overflow-hidden">
         {selected ? (
           <>
-            <div className="detail-header">
-              <h3>{selected.name}</h3>
-              <div className="detail-actions">
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => onEditScript(selected.id)}
-                >
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-semibold">{selected.name}</h3>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => handleCopy(selected.content)}>
+                  复制
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => onEditSnippet(selected.id)}>
                   编辑
-                </button>
-                <button
-                  className="btn btn-danger"
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
                   onClick={() => {
-                    if (confirm("确定要删除该脚本吗？")) handleDelete(selected.id);
+                    if (confirm("确定删除？")) handleDelete(selected.id);
                   }}
                 >
                   删除
-                </button>
+                </Button>
               </div>
             </div>
 
-            <div className="detail-meta">
-              <span
-                className="lang-badge"
-                style={{
-                  backgroundColor:
-                    LANG_COLORS[selected.language] || "var(--text-dim)",
-                }}
-              >
-                {LANG_LABELS[selected.language] || selected.language}
-              </span>
-              <span className="meta-time">
-                更新于 {new Date(selected.updated_at).toLocaleString()}
-              </span>
+            <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
+              <Badge className={LANG_STYLES[selected.language] || "bg-zinc-100 text-zinc-500"}>
+                {langLabel(selected.language)}
+              </Badge>
+              <span>更新于 {new Date(selected.updated_at).toLocaleString()}</span>
             </div>
 
-            <pre className="detail-content">{selected.content}</pre>
-
-            <div className="execute-bar">
-              <button
-                className="btn btn-execute"
-                onClick={handleExecute}
-                disabled={executing}
-              >
-                {executing ? "执行中…" : "▶ 执行"}
-              </button>
+            {/* 语法高亮代码视图 */}
+            <div className="flex-1 overflow-auto border border-border rounded-lg mb-3">
+              <SyntaxHighlight code={selected.content} language={selected.language} className="p-4 m-0" />
             </div>
 
-            {/* ── 输出面板 ── */}
+            <div className="flex gap-2 mb-3">
+              <Button size="sm" variant="secondary" onClick={() => handleCopy(selected.content)}>
+                复制代码
+              </Button>
+              <Button size="sm" onClick={handleExecute} disabled={executing}>
+                {executing ? "执行中…" : "▶ 运行"}
+              </Button>
+            </div>
+
             {result && (
-              <div className="output-panel">
-                <div className="output-header">
+              <div className="border border-border rounded-lg overflow-hidden bg-card">
+                <div className="flex items-center justify-between px-3 py-2 bg-muted/50 text-xs text-muted-foreground">
                   <span>
-                    退出码: {result.exit_code} &middot;{" "}
-                    {result.elapsed_ms}ms
+                    退出码: {result.exit_code} · {result.elapsed_ms}ms
                   </span>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => setResult(null)}
-                  >
+                  <Button size="sm" variant="ghost" onClick={() => setResult(null)}>
                     关闭
-                  </button>
+                  </Button>
                 </div>
-                <div className="output-body">
+                <div className="max-h-48 overflow-y-auto divide-y divide-border">
                   {result.stdout && (
-                    <div className="output-section">
-                      <div className="output-label">标准输出</div>
-                      <pre
-                        className={`output-text ${result.exit_code === 0 ? "" : "output-error"}`}
-                      >
-                        {result.stdout}
-                      </pre>
+                    <div className="px-3 py-2">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+                        标准输出
+                      </p>
+                      <pre className="text-xs font-mono whitespace-pre-wrap">{result.stdout}</pre>
                     </div>
                   )}
                   {result.stderr && (
-                    <div className="output-section">
-                      <div className="output-label">错误输出</div>
-                      <pre className="output-text output-error">
+                    <div className="px-3 py-2">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+                        错误输出
+                      </p>
+                      <pre className="text-xs font-mono whitespace-pre-wrap text-destructive">
                         {result.stderr}
                       </pre>
                     </div>
                   )}
                   {!result.stdout && !result.stderr && (
-                    <div className="output-text output-empty">
-                      （无输出）
-                    </div>
+                    <p className="text-xs text-muted-foreground text-center py-4">（无输出）</p>
                   )}
                 </div>
               </div>
             )}
           </>
         ) : (
-          <div className="empty-state detail-empty">
-            从左侧选择一个脚本，或新建一个脚本
+          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            从左侧选择一个代码片段
           </div>
         )}
       </div>

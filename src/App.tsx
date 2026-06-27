@@ -1,73 +1,69 @@
 import { useState } from "react";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { PageView } from "./types";
 import ScriptList from "./pages/ScriptList";
 import ScriptEditor from "./pages/ScriptEditor";
 import Settings from "./pages/Settings";
-import "./App.css";
+import { Button } from "@/components/ui/button";
 
 function App() {
   const [view, setView] = useState<PageView>("list");
   const [editId, setEditId] = useState<string | null>(null);
 
-  const handleEditScript = (id: string | null) => {
-    setEditId(id);
-    setView("editor");
-  };
-
-  const handleBackToList = () => {
-    setView("list");
+  const openQuickLaunch = async () => {
+    const win = await WebviewWindow.getByLabel("quicklaunch");
+    if (win) {
+      win.show();
+      win.setFocus();
+    }
   };
 
   return (
-    <div className="app-container">
-      {/* ── 侧边栏导航 ── */}
-      <nav className="sidebar">
-        <div className="sidebar-logo">Scripter</div>
-        <div className="sidebar-nav">
-          <button
-            className={`sidebar-item ${view === "list" ? "active" : ""}`}
+    <div className="flex h-screen bg-background">
+      {/* ── 侧边栏 ── */}
+      <aside className="w-44 shrink-0 bg-sidebar border-r border-border flex flex-col">
+        <div className="px-5 pt-5 pb-4">
+          <h1 className="text-lg font-bold text-primary">Scripter</h1>
+        </div>
+
+        <nav className="flex flex-col gap-1 px-2">
+          <Button
+            variant={view === "list" ? "default" : "ghost"}
+            className="justify-start gap-2"
             onClick={() => setView("list")}
           >
-            <span className="sidebar-icon">📜</span>
-            脚本
-          </button>
-          <button
-            className={`sidebar-item ${view === "settings" ? "active" : ""}`}
+            <span>📜</span> 代码
+          </Button>
+          <Button
+            variant={view === "settings" ? "default" : "ghost"}
+            className="justify-start gap-2"
             onClick={() => setView("settings")}
           >
-            <span className="sidebar-icon">⚙️</span>
-            设置
-          </button>
+            <span>⚙️</span> 设置
+          </Button>
+        </nav>
+
+        <div className="flex-1" />
+
+        <div className="px-2 pb-3">
+          <Button variant="outline" className="w-full justify-start gap-2 text-xs" onClick={openQuickLaunch}>
+            <span>⏩</span> 快速启动
+            <kbd className="ml-auto text-[10px] text-muted-foreground bg-background px-1.5 py-0.5 rounded border border-border">
+              Ctrl+P
+            </kbd>
+          </Button>
         </div>
+      </aside>
 
-        <div className="sidebar-spacer" />
-
-        <div className="sidebar-footer">
-          <button
-            className="sidebar-item ql-trigger"
-            onClick={async () => {
-              const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-              const win = await WebviewWindow.getByLabel("quicklaunch");
-              if (win) {
-                win.show();
-                win.setFocus();
-              }
-            }}
-          >
-            <span className="sidebar-icon">⏩</span>
-            快速启动
-            <span className="ql-shortcut">Ctrl+P</span>
-          </button>
-        </div>
-      </nav>
-
-      {/* ── 主内容区 ── */}
-      <main className="main-content">
-        {view === "list" && <ScriptList onEditScript={handleEditScript} />}
-        {view === "editor" && (
-          <ScriptEditor editId={editId} onBack={handleBackToList} />
+      {/* ── 主内容 ── */}
+      <main className="flex-1 overflow-hidden">
+        {view === "list" && (
+          <ScriptList onEditSnippet={(id) => { setEditId(id); setView("editor"); }} />
         )}
-        {view === "settings" && <Settings onBack={handleBackToList} />}
+        {view === "editor" && (
+          <ScriptEditor editId={editId} onBack={() => setView("list")} />
+        )}
+        {view === "settings" && <Settings onBack={() => setView("list")} />}
       </main>
     </div>
   );

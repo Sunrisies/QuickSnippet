@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 
 interface Props {
   onBack: () => void;
@@ -8,19 +10,19 @@ interface Props {
 export default function Settings({ onBack }: Props) {
   const [autostart, setAutostart] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
     invoke<boolean>("get_autostart")
-      .then(setAutostart)
-      .catch((e) => setMsg(String(e)))
-      .finally(() => setLoading(false));
+      .then((v) => {
+        setAutostart(v);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   const handleToggle = useCallback(async () => {
     const next = !autostart;
-    setSaving(true);
     setMsg("");
     try {
       await invoke("set_autostart", { enabled: next });
@@ -28,48 +30,42 @@ export default function Settings({ onBack }: Props) {
       setMsg(next ? "已启用开机自启" : "已禁用开机自启");
     } catch (e) {
       setMsg(String(e));
-    } finally {
-      setSaving(false);
     }
   }, [autostart]);
 
   return (
-    <div className="settings-page">
-      <div className="settings-header">
-        <button className="btn btn-secondary" onClick={onBack}>
+    <div className="h-full flex flex-col p-5">
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" size="sm" onClick={onBack}>
           ← 返回
-        </button>
-        <h2>设置</h2>
+        </Button>
+        <h2 className="text-lg font-semibold">设置</h2>
       </div>
 
-      {loading ? (
-        <div className="settings-loading">加载中…</div>
-      ) : (
-        <div className="settings-body">
-          <div className="setting-item">
-            <div className="setting-info">
-              <span className="setting-label">开机自动启动</span>
-              <span className="setting-desc">
-                启用后，Scripter 将在系统启动时自动运行
-              </span>
+      <div className="max-w-md space-y-4">
+        {loading ? (
+          <p className="text-sm text-muted-foreground">加载中…</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-card">
+              <div>
+                <p className="text-sm font-medium">开机自动启动</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  启用后 Scripter 在系统启动时自动运行
+                </p>
+              </div>
+              <Switch checked={autostart} onCheckedChange={handleToggle} />
             </div>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={autostart}
-                onChange={handleToggle}
-                disabled={saving}
-              />
-              <span className="toggle-slider" />
-            </label>
-          </div>
 
-          {msg && <div className="setting-msg">{msg}</div>}
-        </div>
-      )}
+            {msg && (
+              <p className="text-sm text-primary">{msg}</p>
+            )}
+          </>
+        )}
+      </div>
 
-      <div className="settings-footer">
-        <p>Scripter v0.1.1 &middot; 基于 Tauri + Rust</p>
+      <div className="mt-auto pt-6 text-center text-xs text-muted-foreground">
+        <p>Scripter v0.1.3 &middot; 基于 Tauri + Rust</p>
       </div>
     </div>
   );
