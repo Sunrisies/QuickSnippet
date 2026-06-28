@@ -134,8 +134,13 @@ pub fn run() {
                 .with_handler(move |app, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
                         if let Some(window) = app.get_webview_window("quicklaunch") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
+                            // 切换显示/隐藏
+                            if window.is_visible().unwrap_or(false) {
+                                let _ = window.hide();
+                            } else {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
                         }
                     }
                 })
@@ -176,6 +181,7 @@ pub fn run() {
             .inner_size(580.0, 480.0)
             .center()
             .decorations(false)
+            .transparent(true)
             .always_on_top(true)
             .skip_taskbar(true)
             .resizable(false)
@@ -185,6 +191,26 @@ pub fn run() {
                 eprintln!("[Scripter] 创建 QuickLaunch 窗口失败: {e}");
                 Box::<dyn std::error::Error>::from(e.to_string())
             })?;
+
+            // Windows 圆角
+            #[cfg(target_os = "windows")]
+            {
+                use raw_window_handle::HasWindowHandle;
+                if let Ok(handle) = ql_window.window_handle() {
+                    let hwnd = handle.as_raw();
+                    if let raw_window_handle::RawWindowHandle::Win32(w) = hwnd {
+                        let round = 2u32; // DWMWCP_ROUND = 2
+                        unsafe {
+                            windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute(
+                                w.hwnd.get() as *mut std::ffi::c_void as windows_sys::Win32::Foundation::HWND,
+                                windows_sys::Win32::Graphics::Dwm::DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+                                &round as *const _ as *const std::ffi::c_void,
+                                std::mem::size_of::<u32>() as u32,
+                            );
+                        }
+                    }
+                }
+            }
 
             // 失焦时自动隐藏
             let app_handle = app.handle().clone();

@@ -29,4 +29,6 @@ uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 winreg = "0.10"
 clipboard-win = "5.4"
+raw-window-handle = "0.6"
+windows-sys = { version = "0.61", features = ["Win32_Graphics_Dwm", "Win32_Foundation"] }
 

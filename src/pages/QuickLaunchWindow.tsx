@@ -97,7 +97,7 @@ export default function QuickLaunchWindow() {
   );
 
   return (
-    <div className="h-full flex flex-col bg-white rounded-xl shadow-2xl border border-zinc-200 overflow-hidden">
+    <div className="h-full flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden">
       {/* 搜索框 */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-200">
         <svg className="w-4 h-4 text-zinc-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

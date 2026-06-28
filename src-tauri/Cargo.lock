@@ -2940,6 +2940,7 @@ version = "0.1.1"
 dependencies = [
  "chrono",
  "clipboard-win",
+ "raw-window-handle",
  "rusqlite",
  "serde",
  "serde_json",
@@ -2949,6 +2950,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-shell",
  "uuid",
+ "windows-sys 0.61.2",
  "winreg 0.10.1",
 ]
 
