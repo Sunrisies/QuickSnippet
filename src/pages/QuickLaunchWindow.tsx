@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import Fuse from "fuse.js";
 import type { Script } from "../types";
 import { LANG_STYLES } from "../types";
 
@@ -16,6 +15,28 @@ const langShort = (v: string) => {
   return m[v] || v.slice(0, 3).toUpperCase();
 };
 
+function search(scripts: Script[], query: string) {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return scripts;
+
+  return scripts
+    .map((s) => {
+      const name = s.name.toLowerCase();
+      const content = s.content.toLowerCase();
+      let matchCount = 0;
+      let nameMatch = 0;
+      for (const w of words) {
+        if (name.includes(w)) { matchCount++; nameMatch++; }
+        else if (content.includes(w)) matchCount++;
+      }
+      if (matchCount < words.length) return null;
+      return { script: s, score: nameMatch / words.length };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .sort((a, b) => b.score - a.score)
+    .map((r) => r.script);
+}
+
 export default function QuickLaunchWindow() {
   const [scripts, setScripts] = useState<Script[]>([]);
   const [query, setQuery] = useState("");
@@ -29,27 +50,13 @@ export default function QuickLaunchWindow() {
     setTimeout(() => inputRef.current?.focus(), 80);
   }, []);
 
-  // 失焦隐藏
   useEffect(() => {
     const onBlur = () => getCurrentWindow().hide().catch(() => {});
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
   }, []);
 
-  const fuse = useMemo(
-    () =>
-      new Fuse(scripts, {
-        keys: [{ name: "name", weight: 0.7 }, { name: "content", weight: 0.3 }],
-        threshold: 0.4,
-        minMatchCharLength: 1,
-      }),
-    [scripts],
-  );
-
-  const results = useMemo(() => {
-    if (!query.trim()) return scripts;
-    return fuse.search(query).map((r) => r.item);
-  }, [fuse, query, scripts]);
+  const results = useMemo(() => search(scripts, query), [scripts, query]);
 
   useEffect(() => { setSelectedIndex(0); }, [query]);
 
@@ -76,9 +83,7 @@ export default function QuickLaunchWindow() {
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       switch (e.key) {
-        case "Escape":
-          hideWindow();
-          break;
+        case "Escape": hideWindow(); break;
         case "ArrowDown":
           e.preventDefault();
           setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
@@ -107,7 +112,7 @@ export default function QuickLaunchWindow() {
         <input
           ref={inputRef}
           className="flex-1 border-none bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
-          placeholder="搜索脚本…"
+          placeholder="搜索代码，支持多词过滤…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -123,7 +128,7 @@ export default function QuickLaunchWindow() {
       <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-1.5 space-y-0.5">
         {results.length === 0 ? (
           <p className="text-xs text-zinc-400 text-center py-8">
-            {query ? "没有匹配的脚本" : "输入关键词搜索脚本"}
+            {query ? "没有匹配的代码" : "输入关键词搜索代码"}
           </p>
         ) : (
           results.map((script, i) => (
@@ -132,9 +137,7 @@ export default function QuickLaunchWindow() {
               onClick={() => copyAndClose(script)}
               onMouseEnter={() => setSelectedIndex(i)}
               className={`relative rounded-lg px-3 py-2 cursor-pointer transition-colors ${
-                i === selectedIndex
-                  ? "bg-indigo-50"
-                  : "hover:bg-zinc-50"
+                i === selectedIndex ? "bg-indigo-50" : "hover:bg-zinc-50"
               } ${copiedId === script.id ? "bg-emerald-50" : ""}`}
             >
               <div className="flex items-center gap-2 mb-0.5">

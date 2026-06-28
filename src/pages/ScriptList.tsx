@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import Fuse from "fuse.js";
 import type { Script, ExecutionResult } from "../types";
 import { LANGUAGES, LANG_STYLES } from "../types";
 import { Button } from "@/components/ui/button";
@@ -9,22 +8,28 @@ import { Badge } from "@/components/ui/badge";
 import SyntaxHighlight from "@/components/SyntaxHighlight";
 
 function useSearch(scripts: Script[], query: string) {
-  const fuse = useMemo(
-    () =>
-      new Fuse(scripts, {
-        keys: [
-          { name: "name", weight: 0.7 },
-          { name: "content", weight: 0.3 },
-        ],
-        threshold: 0.4,
-        minMatchCharLength: 1,
-      }),
-    [scripts],
-  );
   return useMemo(() => {
-    if (!query.trim()) return scripts;
-    return fuse.search(query).map((r) => r.item);
-  }, [fuse, query, scripts]);
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return scripts;
+
+    return scripts
+      .map((s) => {
+        const name = s.name.toLowerCase();
+        const content = s.content.toLowerCase();
+        let matchCount = 0;
+        let nameMatch = 0;
+        for (const w of words) {
+          if (name.includes(w)) { matchCount++; nameMatch++; }
+          else if (content.includes(w)) matchCount++;
+        }
+        if (matchCount < words.length) return null;
+        // 分数：名称匹配越多越靠前
+        return { script: s, score: nameMatch / words.length };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+      .sort((a, b) => b.score - a.score)
+      .map((r) => r.script);
+  }, [scripts, query]);
 }
 
 const langLabel = (v: string) => LANGUAGES.find((l) => l.value === v)?.label || v;
