@@ -45,11 +45,26 @@ export default function QuickLaunchWindow() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  const fetchScripts = useCallback(() => {
     invoke<Script[]>("list_scripts").then(setScripts).catch(console.error);
-    setTimeout(() => inputRef.current?.focus(), 80);
   }, []);
 
+  useEffect(() => {
+    fetchScripts();
+    setTimeout(() => inputRef.current?.focus(), 80);
+  }, [fetchScripts]);
+
+  // 每次窗口获得焦点时刷新数据
+  useEffect(() => {
+    const onFocus = () => {
+      fetchScripts();
+      inputRef.current?.focus();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchScripts]);
+
+  // 失焦隐藏
   useEffect(() => {
     const onBlur = () => getCurrentWindow().hide().catch(() => {});
     window.addEventListener("blur", onBlur);
