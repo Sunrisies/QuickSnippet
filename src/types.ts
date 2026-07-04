@@ -3,6 +3,14 @@ export interface Script {
   name: string;
   content: string;
   language: string;
+  folder_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
   created_at: string;
   updated_at: string;
 }
@@ -16,7 +24,6 @@ export interface ExecutionResult {
 
 export type PageView = "list" | "editor" | "settings";
 
-// 支持的语言列表（代码片段场景）
 export const LANGUAGES = [
   { value: "javascript", label: "JavaScript" },
   { value: "typescript", label: "TypeScript" },
