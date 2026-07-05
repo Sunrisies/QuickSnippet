@@ -4,12 +4,142 @@ mod executor;
 
 use db::{Database, Folder, Script};
 use executor::ExecutionResult;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WebviewUrl, WebviewWindowBuilder,
 };
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{
+    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState as GsState,
+};
+
+// ============ 快捷键管理 ============
+
+/// 运行时快捷键状态：shortcut_str → action 的反向映射
+pub struct ShortcutManager {
+    pub action_map: Mutex<HashMap<String, String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ShortcutInfo {
+    pub action: String,
+    pub shortcut: String,
+    pub label: String,
+}
+
+/// 将 Shortcut 对象格式化为 "Ctrl+P" 形式
+fn shortcut_to_string(sc: &Shortcut) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    let mods = sc.mods;
+    if mods.contains(Modifiers::CONTROL) {
+        parts.push("Ctrl");
+    }
+    if mods.contains(Modifiers::ALT) {
+        parts.push("Alt");
+    }
+    if mods.contains(Modifiers::SHIFT) {
+        parts.push("Shift");
+    }
+    if mods.contains(Modifiers::SUPER) {
+        parts.push("Super");
+    }
+    let key = code_to_str(&sc.key);
+    parts.push(key);
+    parts.join("+")
+}
+
+/// 将 Code 转为字符串（与前端显示格式保持一致）
+fn code_to_str(code: &Code) -> &'static str {
+    use tauri_plugin_global_shortcut::Code::*;
+    match code {
+        KeyA => "A", KeyB => "B", KeyC => "C", KeyD => "D", KeyE => "E",
+        KeyF => "F", KeyG => "G", KeyH => "H", KeyI => "I", KeyJ => "J",
+        KeyK => "K", KeyL => "L", KeyM => "M", KeyN => "N", KeyO => "O",
+        KeyP => "P", KeyQ => "Q", KeyR => "R", KeyS => "S", KeyT => "T",
+        KeyU => "U", KeyV => "V", KeyW => "W", KeyX => "X", KeyY => "Y", KeyZ => "Z",
+        Digit0 => "0", Digit1 => "1", Digit2 => "2", Digit3 => "3",
+        Digit4 => "4", Digit5 => "5", Digit6 => "6", Digit7 => "7",
+        Digit8 => "8", Digit9 => "9",
+        Space => "Space", Enter => "Enter", Escape => "Escape", Tab => "Tab",
+        ArrowUp => "Up", ArrowDown => "Down", ArrowLeft => "Left", ArrowRight => "Right",
+        F1 => "F1", F2 => "F2", F3 => "F3", F4 => "F4", F5 => "F5",
+        F6 => "F6", F7 => "F7", F8 => "F8", F9 => "F9", F10 => "F10",
+        F11 => "F11", F12 => "F12",
+        _ => "Unknown",
+    }
+}
+
+/// 将 "Ctrl+P" 格式字符串转为 Code
+fn str_to_code(s: &str) -> Result<Code, String> {
+    use tauri_plugin_global_shortcut::Code::*;
+    Ok(match s {
+        "A" => KeyA, "B" => KeyB, "C" => KeyC, "D" => KeyD, "E" => KeyE,
+        "F" => KeyF, "G" => KeyG, "H" => KeyH, "I" => KeyI, "J" => KeyJ,
+        "K" => KeyK, "L" => KeyL, "M" => KeyM, "N" => KeyN, "O" => KeyO,
+        "P" => KeyP, "Q" => KeyQ, "R" => KeyR, "S" => KeyS, "T" => KeyT,
+        "U" => KeyU, "V" => KeyV, "W" => KeyW, "X" => KeyX, "Y" => KeyY, "Z" => KeyZ,
+        "0" => Digit0, "1" => Digit1, "2" => Digit2, "3" => Digit3,
+        "4" => Digit4, "5" => Digit5, "6" => Digit6, "7" => Digit7,
+        "8" => Digit8, "9" => Digit9,
+        "Space" => Space, "Enter" => Enter, "Escape" | "Esc" => Escape, "Tab" => Tab,
+        "Up" => ArrowUp, "Down" => ArrowDown, "Left" => ArrowLeft, "Right" => ArrowRight,
+        "F1" => F1, "F2" => F2, "F3" => F3, "F4" => F4, "F5" => F5,
+        "F6" => F6, "F7" => F7, "F8" => F8, "F9" => F9, "F10" => F10,
+        "F11" => F11, "F12" => F12,
+        _ => return Err(format!("不支持的按键: {}", s)),
+    })
+}
+
+/// 解析 "Ctrl+P" 格式字符串为 (Option<Modifiers>, Code)
+fn parse_shortcut_str(s: &str) -> Result<(Option<Modifiers>, Code), String> {
+    let parts: Vec<&str> = s.split('+').map(|p| p.trim()).filter(|p| !p.is_empty()).collect();
+    if parts.is_empty() {
+        return Err("快捷键不能为空".to_string());
+    }
+
+    let mut mods = Modifiers::empty();
+    let key_part = parts[parts.len() - 1];
+
+    for part in &parts[..parts.len() - 1] {
+        match *part {
+            "Ctrl" | "Control" => mods |= Modifiers::CONTROL,
+            "Alt" | "Option" => mods |= Modifiers::ALT,
+            "Shift" => mods |= Modifiers::SHIFT,
+            "Super" | "Meta" | "Win" | "Cmd" => mods |= Modifiers::SUPER,
+            _ => return Err(format!("不支持的修饰键: {}", part)),
+        }
+    }
+
+    let code = str_to_code(key_part)?;
+    let mods_opt = if mods.is_empty() { None } else { Some(mods) };
+    Ok((mods_opt, code))
+}
+
+/// 执行快捷键对应的操作
+fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
+    match action {
+        "toggle_quicklaunch" => {
+            if let Some(window) = app.get_webview_window("quicklaunch") {
+                if window.is_visible().unwrap_or(false) {
+                    let _ = window.hide();
+                } else {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        }
+        "show_main" => {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }
+        _ => {}
+    }
+}
 
 // ============ 注册表自启动 (Windows) ============
 
@@ -173,6 +303,82 @@ fn read_text_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {e}"))
 }
 
+// ============ 快捷键命令 ============
+
+#[tauri::command]
+fn get_shortcuts(db: tauri::State<'_, Database>) -> Result<Vec<ShortcutInfo>, String> {
+    let shortcuts = db.get_shortcuts()?;
+    let labels = Database::shortcut_labels();
+    let mut result: Vec<ShortcutInfo> = shortcuts
+        .iter()
+        .map(|(action, shortcut)| ShortcutInfo {
+            action: action.clone(),
+            shortcut: shortcut.clone(),
+            label: labels.get(action).cloned().unwrap_or_default(),
+        })
+        .collect();
+    // 按默认顺序排序
+    let default_order: Vec<&str> = vec!["toggle_quicklaunch", "show_main"];
+    result.sort_by_key(|s| default_order.iter().position(|&a| a == s.action).unwrap_or(99));
+    Ok(result)
+}
+
+#[tauri::command]
+fn set_shortcut(
+    db: tauri::State<'_, Database>,
+    manager: tauri::State<'_, ShortcutManager>,
+    app: tauri::AppHandle,
+    action: String,
+    shortcut: String,
+) -> Result<(), String> {
+    // 1. 获取旧的快捷键
+    let old_shortcuts = db.get_shortcuts()?;
+    let old_shortcut = old_shortcuts.get(&action).cloned();
+
+    // 2. 验证并解析新快捷键
+    let new_parsed = if !shortcut.is_empty() {
+        Some(parse_shortcut_str(&shortcut).map_err(|e| format!("快捷键格式错误: {e}"))?)
+    } else {
+        None
+    };
+
+    // 3. 更新数据库
+    db.set_shortcut(&action, &shortcut)?;
+
+    // 4. 注销旧快捷键
+    if let Some(ref old) = old_shortcut {
+        if !old.is_empty() {
+            if let Ok((mods, code)) = parse_shortcut_str(old) {
+                let sc = Shortcut::new(mods, code);
+                let _ = app.global_shortcut().unregister(sc);
+            }
+        }
+    }
+
+    // 5. 注册新快捷键
+    if let Some((mods, code)) = new_parsed {
+        let sc = Shortcut::new(mods, code);
+        app.global_shortcut()
+            .register(sc)
+            .map_err(|e| format!("注册快捷键失败: {}", e))?;
+    }
+
+    // 6. 更新内存中的反向映射
+    let mut map = manager.action_map.lock().map_err(|e| e.to_string())?;
+    if let Some(ref old) = old_shortcut {
+        if !old.is_empty() {
+            map.remove(old);
+        }
+    }
+    if !shortcut.is_empty() {
+        map.insert(shortcut, action);
+    }
+
+    Ok(())
+}
+
+// ============ 应用入口 ============
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -181,15 +387,17 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(move |app, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        if let Some(window) = app.get_webview_window("quicklaunch") {
-                            if window.is_visible().unwrap_or(false) {
-                                let _ = window.hide();
-                            } else {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                .with_handler(move |app, shortcut, event| {
+                    if event.state == GsState::Pressed {
+                        let sc_str = shortcut_to_string(shortcut);
+                        let state = app.state::<ShortcutManager>();
+                        let action = state
+                            .action_map
+                            .lock()
+                            .ok()
+                            .and_then(|map| map.get(&sc_str).cloned());
+                        if let Some(action) = action {
+                            execute_shortcut_action(app, &action);
                         }
                     }
                 })
@@ -206,7 +414,45 @@ pub fn run() {
                 Box::<dyn std::error::Error>::from(e)
             })?;
 
+            // 初始化快捷键管理器
+            let manager = ShortcutManager {
+                action_map: Mutex::new(HashMap::new()),
+            };
+
+            // 从数据库读取并注册快捷键
+            if let Ok(shortcuts) = database.get_shortcuts() {
+                let mut reverse_map = HashMap::new();
+                for (action, shortcut_str) in &shortcuts {
+                    if !shortcut_str.is_empty() {
+                        if let Ok((mods, code)) = parse_shortcut_str(shortcut_str) {
+                            let sc = Shortcut::new(mods, code);
+                            match app.global_shortcut().register(sc) {
+                                Ok(()) => {
+                                    reverse_map.insert(shortcut_str.clone(), action.clone());
+                                    eprintln!(
+                                        "[Scripter] 已注册快捷键: {} → {}",
+                                        shortcut_str, action
+                                    );
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "[Scripter] 注册快捷键失败 {}: {}",
+                                        shortcut_str, e
+                                    );
+                                }
+                            }
+                        } else {
+                            eprintln!("[Scripter] 解析快捷键失败: {}", shortcut_str);
+                        }
+                    }
+                }
+                if let Ok(mut map) = manager.action_map.lock() {
+                    *map = reverse_map;
+                }
+            }
+
             app.manage(database);
+            app.manage(manager);
 
             // ── 系统托盘 ──
             let show_item = MenuItemBuilder::with_id("show", "打开主界面").build(app)?;
@@ -274,21 +520,11 @@ pub fn run() {
                 let app_handle2 = app.handle().clone();
                 main_window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { .. } = event {
-                        // 阻止关闭，改为隐藏
                         if let Some(w) = app_handle2.get_webview_window("main") {
                             let _ = w.hide();
                         }
                     }
                 });
-            }
-
-            #[cfg(desktop)]
-            {
-                let shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyP);
-                app.global_shortcut().register(shortcut).map_err(|e| {
-                    eprintln!("[Scripter] 注册全局快捷键失败: {e}");
-                    Box::<dyn std::error::Error>::from(e.to_string())
-                })?;
             }
 
             let ql_window = WebviewWindowBuilder::new(
@@ -360,6 +596,8 @@ pub fn run() {
             import_data,
             write_text_file,
             read_text_file,
+            get_shortcuts,
+            set_shortcut,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

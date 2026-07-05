@@ -3,6 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { save, open, message } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import KeyCapture from "@/components/KeyCapture";
+
+interface ShortcutInfo {
+  action: string;
+  shortcut: string;
+  label: string;
+}
 
 interface Props {
   onBack: () => void;
@@ -17,9 +24,20 @@ export default function Settings({ onBack, onDataChanged }: Props) {
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState<"success" | "error" | "info">("info");
 
+  // ── 快捷键 ──
+  const [shortcuts, setShortcuts] = useState<ShortcutInfo[]>([]);
+  const [savingShortcuts, setSavingShortcuts] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
-    invoke<boolean>("get_autostart")
-      .then((v) => { setAutostart(v); setLoading(false); })
+    Promise.all([
+      invoke<boolean>("get_autostart"),
+      invoke<ShortcutInfo[]>("get_shortcuts"),
+    ])
+      .then(([auto, scs]) => {
+        setAutostart(auto);
+        setShortcuts(scs);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
 
@@ -37,6 +55,26 @@ export default function Settings({ onBack, onDataChanged }: Props) {
       showMsg(next ? "已启用开机自启" : "已禁用开机自启", "success");
     } catch (e) { showMsg(String(e), "error"); }
   }, [autostart]);
+
+  // ── 快捷键修改 ──
+  const handleShortcutChange = useCallback(async (action: string, shortcut: string) => {
+    setSavingShortcuts((prev) => ({ ...prev, [action]: true }));
+    setMsg("");
+    try {
+      await invoke("set_shortcut", { action, shortcut });
+      setShortcuts((prev) =>
+        prev.map((s) => (s.action === action ? { ...s, shortcut } : s)),
+      );
+      showMsg(
+        shortcut ? `快捷键已更新` : "快捷键已清除",
+        "success",
+      );
+    } catch (e) {
+      showMsg(String(e), "error");
+    } finally {
+      setSavingShortcuts((prev) => ({ ...prev, [action]: false }));
+    }
+  }, []);
 
   // ── 导出 ──
   const handleExport = useCallback(async () => {
@@ -100,12 +138,35 @@ export default function Settings({ onBack, onDataChanged }: Props) {
           <p className="text-sm text-muted-foreground">加载中…</p>
         ) : (
           <>
+            {/* ── 开机自启 ── */}
             <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-card">
               <div>
                 <p className="text-sm font-medium">开机自动启动</p>
                 <p className="text-xs text-muted-foreground mt-0.5">启用后 Scripter 在系统启动时自动运行</p>
               </div>
               <Switch checked={autostart} onCheckedChange={handleToggle} />
+            </div>
+
+            {/* ── 快捷键 ── */}
+            <div className="rounded-lg border border-border p-4 bg-card">
+              <p className="text-sm font-medium mb-3">快捷键</p>
+              <div className="space-y-3">
+                {shortcuts.map((sc) => (
+                  <div key={sc.action}>
+                    <p className="text-xs text-muted-foreground mb-1">{sc.label}</p>
+                    <KeyCapture
+                      value={sc.shortcut}
+                      onChange={(newShortcut) =>
+                        handleShortcutChange(sc.action, newShortcut)
+                      }
+                      disabled={savingShortcuts[sc.action]}
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                点击快捷键输入框，然后按下新的组合键。支持 Ctrl、Alt、Shift、Super 修饰键。
+              </p>
             </div>
           </>
         )}

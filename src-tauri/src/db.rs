@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -278,6 +279,75 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let value = if enabled { "true" } else { "false" };
         conn.execute("UPDATE settings SET value=?1 WHERE key='autostart'", params![value]).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    // ============ 快捷键配置 ============
+
+    /// 返回默认快捷键映射 (action → 快捷键字符串)
+    pub fn default_shortcuts() -> HashMap<String, String> {
+        let mut m = HashMap::new();
+        m.insert("toggle_quicklaunch".to_string(), "Ctrl+P".to_string());
+        m.insert("show_main".to_string(), "Ctrl+Shift+Space".to_string());
+        m
+    }
+
+    /// 返回所有操作的默认标签 (action → 中文描述)
+    pub fn shortcut_labels() -> HashMap<String, String> {
+        let mut m = HashMap::new();
+        m.insert("toggle_quicklaunch".to_string(), "快速搜索框".to_string());
+        m.insert("show_main".to_string(), "打开主界面".to_string());
+        m
+    }
+
+    /// 读取所有快捷键配置，未配置的返回默认值
+    pub fn get_shortcuts(&self) -> Result<HashMap<String, String>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let saved: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key='shortcuts'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        let saved_map: HashMap<String, String> = match saved {
+            Some(json) => serde_json::from_str(&json).unwrap_or_default(),
+            None => HashMap::new(),
+        };
+        // 合并默认值：已保存的覆盖默认
+        let mut result = Self::default_shortcuts();
+        for (k, v) in saved_map {
+            result.insert(k, v);
+        }
+        Ok(result)
+    }
+
+    /// 设置单个快捷键并持久化
+    pub fn set_shortcut(&self, action: &str, shortcut: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        // 直接读 DB，不走 self.get_shortcuts() 避免死锁
+        let saved: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key='shortcuts'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        let mut current: HashMap<String, String> = match saved {
+            Some(json) => serde_json::from_str(&json).unwrap_or_default(),
+            None => HashMap::new(),
+        };
+        if shortcut.is_empty() {
+            current.remove(action);
+        } else {
+            current.insert(action.to_string(), shortcut.to_string());
+        }
+        let json = serde_json::to_string(&current).map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('shortcuts', ?1)",
+            params![json],
+        )
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
