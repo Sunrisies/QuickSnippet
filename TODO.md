@@ -11,7 +11,7 @@
   - 语法高亮编辑器（Monaco Editor 或 CodeMirror）
   - 代码格式化（Prettier 等）
 
-- [ ] **数据导入/导出**
+- [x] **数据导入/导出**
   - 导出为 JSON / Markdown 文件
   - 从文件批量导入
   - 方便备份和迁移

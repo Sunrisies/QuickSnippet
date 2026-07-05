@@ -83,9 +83,8 @@ function App() {
           {/* 全部 */}
           <div
             onClick={() => setSelectedFolderId(null)}
-            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer text-xs transition-colors ${
-              selectedFolderId === null ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
-            }`}
+            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer text-xs transition-colors ${selectedFolderId === null ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
+              }`}
           >
             <span>📁</span> 全部
           </div>
@@ -104,9 +103,8 @@ function App() {
               ) : (
                 <div
                   onClick={() => setSelectedFolderId(f.id)}
-                  className={`flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer text-xs transition-colors ${
-                    selectedFolderId === f.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
-                  }`}
+                  className={`flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer text-xs transition-colors ${selectedFolderId === f.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
+                    }`}
                 >
                   <span>📂</span>
                   <span className="truncate">{f.name}</span>
@@ -122,13 +120,7 @@ function App() {
           ))}
         </div>
 
-        {/* 底部快速启动 */}
-        <div className="px-2 pb-3 mt-2">
-          <Button variant="outline" className="w-full justify-start gap-2 text-xs" onClick={openQuickLaunch}>
-            <span>⏩</span> 快速启动
-            <kbd className="ml-auto text-[10px] text-muted-foreground bg-background px-1.5 py-0.5 rounded border border-border">Ctrl+P</kbd>
-          </Button>
-        </div>
+
       </aside>
 
       {/* ── 主内容 ── */}
@@ -148,7 +140,7 @@ function App() {
             onBack={() => { setView("list"); fetchFolders(); }}
           />
         )}
-        {view === "settings" && <Settings onBack={() => setView("list")} />}
+        {view === "settings" && <Settings onBack={() => setView("list")} onDataChanged={fetchFolders} />}
       </main>
     </div>
   );

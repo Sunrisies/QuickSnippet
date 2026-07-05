@@ -22,6 +22,34 @@ pub struct Folder {
     pub updated_at: String,
 }
 
+#[derive(Serialize)]
+pub struct ExportData {
+    pub version: u32,
+    pub exported_at: String,
+    pub folders: Vec<Folder>,
+    pub scripts: Vec<Script>,
+}
+
+#[derive(Deserialize)]
+pub struct ImportData {
+    pub version: u32,
+    pub folders: Vec<ImportFolder>,
+    pub scripts: Vec<ImportScript>,
+}
+
+#[derive(Deserialize)]
+pub struct ImportFolder {
+    pub name: String,
+}
+
+#[derive(Deserialize)]
+pub struct ImportScript {
+    pub name: String,
+    pub content: String,
+    pub language: String,
+    pub folder_name: Option<String>,
+}
+
 pub struct Database {
     pub conn: Mutex<Connection>,
 }
@@ -251,5 +279,80 @@ impl Database {
         let value = if enabled { "true" } else { "false" };
         conn.execute("UPDATE settings SET value=?1 WHERE key='autostart'", params![value]).map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    // ============ 导入导出 ============
+
+    pub fn export_data(&self) -> Result<String, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare("SELECT id, name, created_at, updated_at FROM folders ORDER BY name").map_err(|e| e.to_string())?;
+        let folders: Vec<Folder> = stmt.query_map([], |row| {
+            Ok(Folder { id: row.get(0)?, name: row.get(1)?, created_at: row.get(2)?, updated_at: row.get(3)? })
+        }).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
+
+        let mut stmt = conn.prepare("SELECT id, name, content, language, folder_id, created_at, updated_at FROM scripts ORDER BY updated_at DESC").map_err(|e| e.to_string())?;
+        let scripts: Vec<Script> = stmt.query_map([], |row| {
+            Ok(Script { id: row.get(0)?, name: row.get(1)?, content: row.get(2)?, language: row.get(3)?, folder_id: row.get(4)?, created_at: row.get(5)?, updated_at: row.get(6)? })
+        }).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
+
+        let export = serde_json::json!({
+            "version": 1,
+            "exported_at": chrono::Utc::now().to_rfc3339(),
+            "folders": folders,
+            "scripts": scripts,
+        });
+        serde_json::to_string_pretty(&export).map_err(|e| e.to_string())
+    }
+
+    pub fn import_data(&self, json_str: &str) -> Result<(usize, usize), String> {
+        let import: ImportData = serde_json::from_str(json_str).map_err(|e| format!("JSON 解析失败: {e}"))?;
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+
+        // 先收集已有文件夹名 → id 映射，避免重复创建同名文件夹
+        let mut folder_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        {
+            let mut stmt = conn
+                .prepare("SELECT id, name FROM folders")
+                .map_err(|e| e.to_string())?;
+            let rows = stmt
+                .query_map([], |row| {
+                    let id: String = row.get(0)?;
+                    let name: String = row.get(1)?;
+                    Ok((id, name))
+                })
+                .map_err(|e| e.to_string())?;
+            for row in rows.flatten() {
+                folder_map.insert(row.1, row.0);
+            }
+        }
+
+        // 为导入的文件夹创建新 ID（如已存在同名则复用）
+        for f in &import.folders {
+            if !folder_map.contains_key(&f.name) {
+                let id = uuid::Uuid::new_v4().to_string();
+                let now = chrono::Utc::now().to_rfc3339();
+                conn.execute(
+                    "INSERT INTO folders (id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                    params![id, f.name, now, now],
+                )
+                .map_err(|e| e.to_string())?;
+                folder_map.insert(f.name.clone(), id);
+            }
+        }
+
+        // 导入脚本
+        let mut script_count = 0;
+        for s in &import.scripts {
+            let id = uuid::Uuid::new_v4().to_string();
+            let now = chrono::Utc::now().to_rfc3339();
+            let fid = s.folder_name.as_ref().and_then(|n| folder_map.get(n)).cloned();
+            conn.execute(
+                "INSERT INTO scripts (id, name, content, language, folder_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![id, s.name, s.content, s.language, fid, now, now],
+            ).map_err(|e| e.to_string())?;
+            script_count += 1;
+        }
+
+        Ok((import.folders.len(), script_count))
     }
 }

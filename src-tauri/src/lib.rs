@@ -153,10 +153,31 @@ fn list_folders(db: tauri::State<'_, Database>) -> Result<Vec<Folder>, String> {
     db.list_folders()
 }
 
+#[tauri::command]
+fn export_data(db: tauri::State<'_, Database>) -> Result<String, String> {
+    db.export_data()
+}
+
+#[tauri::command]
+fn import_data(db: tauri::State<'_, Database>, json: String) -> Result<(usize, usize), String> {
+    db.import_data(&json)
+}
+
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, &content).map_err(|e| format!("写入文件失败: {e}"))
+}
+
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {e}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -210,7 +231,7 @@ pub fn run() {
                 let (w, h) = rgba.dimensions();
                 tauri::image::Image::new_owned(rgba.into_raw(), w, h)
             };
-            let tray_icon = TrayIconBuilder::new()
+            let _tray_icon = TrayIconBuilder::new()
                 .icon(tray_img)
                 .menu(&menu)
                 .tooltip("QuickSnippet")
@@ -335,6 +356,10 @@ pub fn run() {
             rename_folder,
             delete_folder,
             list_folders,
+            export_data,
+            import_data,
+            write_text_file,
+            read_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
