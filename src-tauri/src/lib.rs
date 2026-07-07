@@ -226,6 +226,27 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();
                 let _ = w.set_focus();
+            } else {
+                if let Ok(w) = WebviewWindowBuilder::new(
+                        app,
+                        "main",
+                        WebviewUrl::App("index.html".into()),
+                    )
+                    .title("QuickKit - 快捷工具箱")
+                    .inner_size(960.0, 680.0)
+                    .min_inner_size(720.0, 480.0)
+                    .center()
+                    .build()
+                {
+                    let app2 = app.clone();
+                    w.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { .. } = event {
+                            if let Some(w) = app2.get_webview_window("main") {
+                                let _ = w.hide();
+                            }
+                        }
+                    });
+                }
             }
         }
         "upload_image" => {
