@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import type { PageView, Folder } from "./types";
-import ScriptList from "./pages/ScriptList";
-import ScriptEditor from "./pages/ScriptEditor";
-import Settings from "./pages/Settings";
 import { Button } from "@/components/ui/button";
-
+import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useState } from "react";
+import ScriptEditor from "./pages/ScriptEditor";
+import ScriptList from "./pages/ScriptList";
+import Settings from "./pages/Settings";
+import type { Folder, PageView } from "./types";
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 function App() {
   const [view, setView] = useState<PageView>("list");
   const [editId, setEditId] = useState<string | null>(null);
@@ -15,7 +14,10 @@ function App() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const sa = WebviewWindow.getAll().then(res => {
 
+    console.log(res, '1=1==1=11==1')
+  })
   const fetchFolders = useCallback(async () => {
     try {
       const list = await invoke<Folder[]>("list_folders");
@@ -27,10 +29,7 @@ function App() {
 
   useEffect(() => { fetchFolders(); }, [fetchFolders]);
 
-  const openQuickLaunch = async () => {
-    const win = await WebviewWindow.getByLabel("quicklaunch");
-    if (win) { win.show(); win.setFocus(); }
-  };
+
 
   const handleCreateFolder = async () => {
     const name = prompt("文件夹名称：");

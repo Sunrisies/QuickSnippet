@@ -51,6 +51,17 @@ pub struct ImportScript {
     pub folder_name: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct CloudConfig {
+    pub provider: String,     // "qiniu" | "aliyun" | "s3"
+    pub endpoint: String,     // S3 兼容端点
+    pub region: String,       // 区域
+    pub bucket: String,       // 存储空间名
+    pub access_key: String,   // AccessKey
+    pub secret_key: String,   // SecretKey
+    pub domain: String,       // 公网访问域名
+}
+
 pub struct Database {
     pub conn: Mutex<Connection>,
 }
@@ -289,6 +300,7 @@ impl Database {
         let mut m = HashMap::new();
         m.insert("toggle_quicklaunch".to_string(), "Ctrl+P".to_string());
         m.insert("show_main".to_string(), "Ctrl+Shift+Space".to_string());
+        m.insert("upload_image".to_string(), "Ctrl+Shift+U".to_string());
         m
     }
 
@@ -297,6 +309,7 @@ impl Database {
         let mut m = HashMap::new();
         m.insert("toggle_quicklaunch".to_string(), "快速搜索框".to_string());
         m.insert("show_main".to_string(), "打开主界面".to_string());
+        m.insert("upload_image".to_string(), "剪贴板图片上传".to_string());
         m
     }
 
@@ -345,6 +358,36 @@ impl Database {
         let json = serde_json::to_string(&current).map_err(|e| e.to_string())?;
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('shortcuts', ?1)",
+            params![json],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    // ============ 云存储配置 ============
+
+    /// 读取云存储配置，未配置时返回默认空配置
+    pub fn get_cloud_config(&self) -> Result<CloudConfig, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let saved: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key='cloud_config'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        match saved {
+            Some(json) => serde_json::from_str(&json).map_err(|e| e.to_string()),
+            None => Ok(CloudConfig::default()),
+        }
+    }
+
+    /// 保存云存储配置
+    pub fn set_cloud_config(&self, config: &CloudConfig) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let json = serde_json::to_string(config).map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('cloud_config', ?1)",
             params![json],
         )
         .map_err(|e| e.to_string())?;

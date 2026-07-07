@@ -1,8 +1,9 @@
 mod autostart;
 mod db;
 mod executor;
+mod uploader;
 
-use db::{Database, Folder, Script};
+use db::{CloudConfig, Database, Folder, Script};
 use executor::ExecutionResult;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -55,19 +56,62 @@ fn shortcut_to_string(sc: &Shortcut) -> String {
 fn code_to_str(code: &Code) -> &'static str {
     use tauri_plugin_global_shortcut::Code::*;
     match code {
-        KeyA => "A", KeyB => "B", KeyC => "C", KeyD => "D", KeyE => "E",
-        KeyF => "F", KeyG => "G", KeyH => "H", KeyI => "I", KeyJ => "J",
-        KeyK => "K", KeyL => "L", KeyM => "M", KeyN => "N", KeyO => "O",
-        KeyP => "P", KeyQ => "Q", KeyR => "R", KeyS => "S", KeyT => "T",
-        KeyU => "U", KeyV => "V", KeyW => "W", KeyX => "X", KeyY => "Y", KeyZ => "Z",
-        Digit0 => "0", Digit1 => "1", Digit2 => "2", Digit3 => "3",
-        Digit4 => "4", Digit5 => "5", Digit6 => "6", Digit7 => "7",
-        Digit8 => "8", Digit9 => "9",
-        Space => "Space", Enter => "Enter", Escape => "Escape", Tab => "Tab",
-        ArrowUp => "Up", ArrowDown => "Down", ArrowLeft => "Left", ArrowRight => "Right",
-        F1 => "F1", F2 => "F2", F3 => "F3", F4 => "F4", F5 => "F5",
-        F6 => "F6", F7 => "F7", F8 => "F8", F9 => "F9", F10 => "F10",
-        F11 => "F11", F12 => "F12",
+        KeyA => "A",
+        KeyB => "B",
+        KeyC => "C",
+        KeyD => "D",
+        KeyE => "E",
+        KeyF => "F",
+        KeyG => "G",
+        KeyH => "H",
+        KeyI => "I",
+        KeyJ => "J",
+        KeyK => "K",
+        KeyL => "L",
+        KeyM => "M",
+        KeyN => "N",
+        KeyO => "O",
+        KeyP => "P",
+        KeyQ => "Q",
+        KeyR => "R",
+        KeyS => "S",
+        KeyT => "T",
+        KeyU => "U",
+        KeyV => "V",
+        KeyW => "W",
+        KeyX => "X",
+        KeyY => "Y",
+        KeyZ => "Z",
+        Digit0 => "0",
+        Digit1 => "1",
+        Digit2 => "2",
+        Digit3 => "3",
+        Digit4 => "4",
+        Digit5 => "5",
+        Digit6 => "6",
+        Digit7 => "7",
+        Digit8 => "8",
+        Digit9 => "9",
+        Space => "Space",
+        Enter => "Enter",
+        Escape => "Escape",
+        Tab => "Tab",
+        ArrowUp => "Up",
+        ArrowDown => "Down",
+        ArrowLeft => "Left",
+        ArrowRight => "Right",
+        F1 => "F1",
+        F2 => "F2",
+        F3 => "F3",
+        F4 => "F4",
+        F5 => "F5",
+        F6 => "F6",
+        F7 => "F7",
+        F8 => "F8",
+        F9 => "F9",
+        F10 => "F10",
+        F11 => "F11",
+        F12 => "F12",
         _ => "Unknown",
     }
 }
@@ -76,26 +120,73 @@ fn code_to_str(code: &Code) -> &'static str {
 fn str_to_code(s: &str) -> Result<Code, String> {
     use tauri_plugin_global_shortcut::Code::*;
     Ok(match s {
-        "A" => KeyA, "B" => KeyB, "C" => KeyC, "D" => KeyD, "E" => KeyE,
-        "F" => KeyF, "G" => KeyG, "H" => KeyH, "I" => KeyI, "J" => KeyJ,
-        "K" => KeyK, "L" => KeyL, "M" => KeyM, "N" => KeyN, "O" => KeyO,
-        "P" => KeyP, "Q" => KeyQ, "R" => KeyR, "S" => KeyS, "T" => KeyT,
-        "U" => KeyU, "V" => KeyV, "W" => KeyW, "X" => KeyX, "Y" => KeyY, "Z" => KeyZ,
-        "0" => Digit0, "1" => Digit1, "2" => Digit2, "3" => Digit3,
-        "4" => Digit4, "5" => Digit5, "6" => Digit6, "7" => Digit7,
-        "8" => Digit8, "9" => Digit9,
-        "Space" => Space, "Enter" => Enter, "Escape" | "Esc" => Escape, "Tab" => Tab,
-        "Up" => ArrowUp, "Down" => ArrowDown, "Left" => ArrowLeft, "Right" => ArrowRight,
-        "F1" => F1, "F2" => F2, "F3" => F3, "F4" => F4, "F5" => F5,
-        "F6" => F6, "F7" => F7, "F8" => F8, "F9" => F9, "F10" => F10,
-        "F11" => F11, "F12" => F12,
+        "A" => KeyA,
+        "B" => KeyB,
+        "C" => KeyC,
+        "D" => KeyD,
+        "E" => KeyE,
+        "F" => KeyF,
+        "G" => KeyG,
+        "H" => KeyH,
+        "I" => KeyI,
+        "J" => KeyJ,
+        "K" => KeyK,
+        "L" => KeyL,
+        "M" => KeyM,
+        "N" => KeyN,
+        "O" => KeyO,
+        "P" => KeyP,
+        "Q" => KeyQ,
+        "R" => KeyR,
+        "S" => KeyS,
+        "T" => KeyT,
+        "U" => KeyU,
+        "V" => KeyV,
+        "W" => KeyW,
+        "X" => KeyX,
+        "Y" => KeyY,
+        "Z" => KeyZ,
+        "0" => Digit0,
+        "1" => Digit1,
+        "2" => Digit2,
+        "3" => Digit3,
+        "4" => Digit4,
+        "5" => Digit5,
+        "6" => Digit6,
+        "7" => Digit7,
+        "8" => Digit8,
+        "9" => Digit9,
+        "Space" => Space,
+        "Enter" => Enter,
+        "Escape" | "Esc" => Escape,
+        "Tab" => Tab,
+        "Up" => ArrowUp,
+        "Down" => ArrowDown,
+        "Left" => ArrowLeft,
+        "Right" => ArrowRight,
+        "F1" => F1,
+        "F2" => F2,
+        "F3" => F3,
+        "F4" => F4,
+        "F5" => F5,
+        "F6" => F6,
+        "F7" => F7,
+        "F8" => F8,
+        "F9" => F9,
+        "F10" => F10,
+        "F11" => F11,
+        "F12" => F12,
         _ => return Err(format!("不支持的按键: {}", s)),
     })
 }
 
 /// 解析 "Ctrl+P" 格式字符串为 (Option<Modifiers>, Code)
 fn parse_shortcut_str(s: &str) -> Result<(Option<Modifiers>, Code), String> {
-    let parts: Vec<&str> = s.split('+').map(|p| p.trim()).filter(|p| !p.is_empty()).collect();
+    let parts: Vec<&str> = s
+        .split('+')
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .collect();
     if parts.is_empty() {
         return Err("快捷键不能为空".to_string());
     }
@@ -137,6 +228,9 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
                 let _ = w.set_focus();
             }
         }
+        "upload_image" => {
+            // 由前端调用 upload_clipboard_image 命令
+        }
         _ => {}
     }
 }
@@ -156,13 +250,13 @@ fn set_registry_autostart(enabled: bool) -> Result<(), String> {
         )
         .map_err(|e| format!("无法打开注册表 Run 键: {}", e))?;
     if enabled {
-        let exe_path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("Scripter.exe"));
+        let exe_path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("QuickKit.exe"));
         run_key
-            .set_value("Scripter", &exe_path.to_string_lossy().to_string())
+            .set_value("QuickKit", &exe_path.to_string_lossy().to_string())
             .map_err(|e| format!("设置自启动失败: {}", e))?;
     } else {
         run_key
-            .delete_value("Scripter")
+            .delete_value("QuickKit")
             .map_err(|e| format!("删除自启动失败: {}", e))?;
     }
     Ok(())
@@ -176,7 +270,7 @@ fn is_registry_autostart() -> Result<bool, String> {
     let run_key = hkcu
         .open_subkey_with_flags(r"Software\Microsoft\Windows\CurrentVersion\Run", KEY_READ)
         .map_err(|e| format!("无法打开注册表 Run 键: {}", e))?;
-    match run_key.get_value::<String, _>("Scripter") {
+    match run_key.get_value::<String, _>("QuickKit") {
         Ok(val) => Ok(!val.is_empty()),
         Err(_) => Ok(false),
     }
@@ -318,8 +412,13 @@ fn get_shortcuts(db: tauri::State<'_, Database>) -> Result<Vec<ShortcutInfo>, St
         })
         .collect();
     // 按默认顺序排序
-    let default_order: Vec<&str> = vec!["toggle_quicklaunch", "show_main"];
-    result.sort_by_key(|s| default_order.iter().position(|&a| a == s.action).unwrap_or(99));
+    let default_order: Vec<&str> = vec!["toggle_quicklaunch", "show_main", "upload_image"];
+    result.sort_by_key(|s| {
+        default_order
+            .iter()
+            .position(|&a| a == s.action)
+            .unwrap_or(99)
+    });
     Ok(result)
 }
 
@@ -377,6 +476,32 @@ fn set_shortcut(
     Ok(())
 }
 
+// ============ 云存储命令 ============
+
+#[tauri::command]
+fn get_cloud_config(db: tauri::State<'_, Database>) -> Result<CloudConfig, String> {
+    db.get_cloud_config()
+}
+
+#[tauri::command]
+fn set_cloud_config(db: tauri::State<'_, Database>, config: CloudConfig) -> Result<(), String> {
+    db.set_cloud_config(&config)
+}
+
+#[tauri::command]
+async fn upload_clipboard_image(
+    db: tauri::State<'_, Database>,
+    _app: tauri::AppHandle,
+) -> Result<String, String> {
+    let config = db.get_cloud_config()?;
+    let url = uploader::upload_clipboard_image(&config).await?;
+
+    // 将 URL 复制到剪贴板
+    clipboard_win::set_clipboard_string(&url).map_err(|e| format!("写入剪贴板失败: {}", e))?;
+
+    Ok(url)
+}
+
 // ============ 应用入口 ============
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -405,12 +530,12 @@ pub fn run() {
         )
         .setup(|app| {
             let app_dir = app.path().app_data_dir().map_err(|e| {
-                eprintln!("[Scripter] 无法获取应用数据目录: {e}");
+                eprintln!("[QuickKit] 无法获取应用数据目录: {e}");
                 e
             })?;
 
             let database = Database::new(app_dir).map_err(|e| {
-                eprintln!("[Scripter] 无法初始化数据库: {e}");
+                eprintln!("[QuickKit] 无法初始化数据库: {e}");
                 Box::<dyn std::error::Error>::from(e)
             })?;
 
@@ -430,19 +555,16 @@ pub fn run() {
                                 Ok(()) => {
                                     reverse_map.insert(shortcut_str.clone(), action.clone());
                                     eprintln!(
-                                        "[Scripter] 已注册快捷键: {} → {}",
+                                        "[QuickKit] 已注册快捷键: {} → {}",
                                         shortcut_str, action
                                     );
                                 }
                                 Err(e) => {
-                                    eprintln!(
-                                        "[Scripter] 注册快捷键失败 {}: {}",
-                                        shortcut_str, e
-                                    );
+                                    eprintln!("[QuickKit] 注册快捷键失败 {}: {}", shortcut_str, e);
                                 }
                             }
                         } else {
-                            eprintln!("[Scripter] 解析快捷键失败: {}", shortcut_str);
+                            eprintln!("[QuickKit] 解析快捷键失败: {}", shortcut_str);
                         }
                     }
                 }
@@ -455,7 +577,7 @@ pub fn run() {
             app.manage(manager);
 
             // ── 系统托盘 ──
-            let show_item = MenuItemBuilder::with_id("show", "打开主界面").build(app)?;
+            let show_item = MenuItemBuilder::with_id("main", "打开主界面").build(app)?;
             let quicklaunch_item =
                 MenuItemBuilder::with_id("quicklaunch", "快速启动").build(app)?;
             let separator = PredefinedMenuItem::separator(app)?;
@@ -470,34 +592,57 @@ pub fn run() {
             let tray_img = {
                 let img = image::load_from_memory(include_bytes!("../icons/QuickSnippet.png"))
                     .map_err(|e| {
-                        eprintln!("[Scripter] 解码托盘图标失败: {e}");
+                        eprintln!("[QuickKit] 解码托盘图标失败: {e}");
                         Box::<dyn std::error::Error>::from(e.to_string())
                     })?;
                 let rgba = img.into_rgba8();
                 let (w, h) = rgba.dimensions();
                 tauri::image::Image::new_owned(rgba.into_raw(), w, h)
             };
-            let _tray_icon = TrayIconBuilder::new()
+            let tray_icon = TrayIconBuilder::new()
                 .icon(tray_img)
                 .menu(&menu)
-                .tooltip("QuickSnippet")
-                .on_menu_event(|app, event| match event.id().as_ref() {
-                    "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
+                .tooltip("QuickKit")
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "main" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            } else {
+                                if let Ok(w) = WebviewWindowBuilder::new(
+                                        app,
+                                        "main",
+                                        WebviewUrl::App("index.html".into()),
+                                    )
+                                    .title("QuickKit - 快捷工具箱")
+                                    .inner_size(960.0, 680.0)
+                                    .min_inner_size(720.0, 480.0)
+                                    .center()
+                                    .build()
+                                {
+                                    let app2 = app.clone();
+                                    w.on_window_event(move |event| {
+                                        if let tauri::WindowEvent::CloseRequested { .. } = event {
+                                            if let Some(w) = app2.get_webview_window("main") {
+                                                let _ = w.hide();
+                                            }
+                                        }
+                                    });
+                                }
+                            }
                         }
-                    }
-                    "quicklaunch" => {
-                        if let Some(w) = app.get_webview_window("quicklaunch") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
+                        "quicklaunch" => {
+                            if let Some(w) = app.get_webview_window("quicklaunch") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
                         }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
                     }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
@@ -514,6 +659,7 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+            app.manage(tray_icon);
 
             // 主窗口关闭时最小化到托盘
             if let Some(main_window) = app.get_webview_window("main") {
@@ -525,6 +671,28 @@ pub fn run() {
                         }
                     }
                 });
+            } else {
+                // setup 时主窗口不存在则创建（dev 模式兜底）
+                if let Ok(main_window) = WebviewWindowBuilder::new(
+                        app,
+                        "main",
+                        WebviewUrl::App("index.html".into()),
+                    )
+                    .title("QuickKit - 快捷工具箱")
+                    .inner_size(960.0, 680.0)
+                    .min_inner_size(720.0, 480.0)
+                    .center()
+                    .build()
+                {
+                    let app_handle2 = app.handle().clone();
+                    main_window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { .. } = event {
+                            if let Some(w) = app_handle2.get_webview_window("main") {
+                                let _ = w.hide();
+                            }
+                        }
+                    });
+                }
             }
 
             let ql_window = WebviewWindowBuilder::new(
@@ -543,7 +711,7 @@ pub fn run() {
             .visible(false)
             .build()
             .map_err(|e| {
-                eprintln!("[Scripter] 创建 QuickLaunch 窗口失败: {e}");
+                eprintln!("[QuickKit] 创建 QuickLaunch 窗口失败: {e}");
                 Box::<dyn std::error::Error>::from(e.to_string())
             })?;
 
@@ -598,6 +766,9 @@ pub fn run() {
             read_text_file,
             get_shortcuts,
             set_shortcut,
+            get_cloud_config,
+            set_cloud_config,
+            upload_clipboard_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

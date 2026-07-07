@@ -11,6 +11,40 @@ interface ShortcutInfo {
   label: string;
 }
 
+interface CloudConfig {
+  provider: string;
+  endpoint: string;
+  region: string;
+  bucket: string;
+  access_key: string;
+  secret_key: string;
+  domain: string;
+}
+
+const PROVIDERS = [
+  { value: "qiniu", label: "七牛云 (Kodo)" },
+  { value: "aliyun", label: "阿里云 (OSS)" },
+  { value: "s3", label: "通用 S3" },
+];
+
+const PROVIDER_PLACEHOLDERS: Record<string, Partial<CloudConfig>> = {
+  qiniu: {
+    endpoint: "s3-cn-south-1.qiniucs.com",
+    region: "cn-south-1",
+    domain: "https://cdn.example.com",
+  },
+  aliyun: {
+    endpoint: "oss-cn-hangzhou.aliyuncs.com",
+    region: "cn-hangzhou",
+    domain: "https://bucket-name.oss-cn-hangzhou.aliyuncs.com",
+  },
+  s3: {
+    endpoint: "s3.amazonaws.com",
+    region: "us-east-1",
+    domain: "https://bucket.s3.amazonaws.com",
+  },
+};
+
 interface Props {
   onBack: () => void;
   onDataChanged?: () => void;
@@ -28,14 +62,28 @@ export default function Settings({ onBack, onDataChanged }: Props) {
   const [shortcuts, setShortcuts] = useState<ShortcutInfo[]>([]);
   const [savingShortcuts, setSavingShortcuts] = useState<Record<string, boolean>>({});
 
+  // ── 云存储 ──
+  const [cloudConfig, setCloudConfig] = useState<CloudConfig>({
+    provider: "qiniu",
+    endpoint: "",
+    region: "",
+    bucket: "",
+    access_key: "",
+    secret_key: "",
+    domain: "",
+  });
+  const [savingCloud, setSavingCloud] = useState(false);
+
   useEffect(() => {
     Promise.all([
       invoke<boolean>("get_autostart"),
       invoke<ShortcutInfo[]>("get_shortcuts"),
+      invoke<CloudConfig>("get_cloud_config"),
     ])
-      .then(([auto, scs]) => {
+      .then(([auto, scs, cloud]) => {
         setAutostart(auto);
         setShortcuts(scs);
+        setCloudConfig((prev) => ({ ...prev, ...cloud }));
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -65,10 +113,7 @@ export default function Settings({ onBack, onDataChanged }: Props) {
       setShortcuts((prev) =>
         prev.map((s) => (s.action === action ? { ...s, shortcut } : s)),
       );
-      showMsg(
-        shortcut ? `快捷键已更新` : "快捷键已清除",
-        "success",
-      );
+      showMsg(shortcut ? "快捷键已更新" : "快捷键已清除", "success");
     } catch (e) {
       showMsg(String(e), "error");
     } finally {
@@ -76,11 +121,40 @@ export default function Settings({ onBack, onDataChanged }: Props) {
     }
   }, []);
 
+  // ── 云存储 ──
+  const updateCloudField = (field: keyof CloudConfig, value: string) => {
+    setCloudConfig((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleProviderChange = (provider: string) => {
+    const placeholders = PROVIDER_PLACEHOLDERS[provider] || {};
+    setCloudConfig((prev) => ({
+      ...prev,
+      provider,
+      endpoint: prev.endpoint || placeholders.endpoint || "",
+      region: prev.region || placeholders.region || "",
+      domain: prev.domain || placeholders.domain || "",
+    }));
+  };
+
+  const handleSaveCloud = useCallback(async () => {
+    setSavingCloud(true);
+    setMsg("");
+    try {
+      await invoke("set_cloud_config", { config: cloudConfig });
+      showMsg("云存储配置已保存", "success");
+    } catch (e) {
+      showMsg(`保存失败: ${e}`, "error");
+    } finally {
+      setSavingCloud(false);
+    }
+  }, [cloudConfig]);
+
   // ── 导出 ──
   const handleExport = useCallback(async () => {
     try {
       const path = await save({
-        defaultPath: `QuickSnippet-export-${new Date().toISOString().slice(0, 10)}.json`,
+        defaultPath: `QuickKit-export-${new Date().toISOString().slice(0, 10)}.json`,
         filters: [{ name: "JSON", extensions: ["json"] }],
       });
       if (!path) return;
@@ -109,7 +183,7 @@ export default function Settings({ onBack, onDataChanged }: Props) {
         title: "确认导入",
         kind: "warning",
         okLabel: "确定导入",
-        cancelLabel: "取消",
+        buttons: { yes: 'Show content', no: 'Show in folder', cancel: '取消' }
       });
       if (!ok) return;
 
@@ -133,7 +207,7 @@ export default function Settings({ onBack, onDataChanged }: Props) {
         <h2 className="text-lg font-semibold">设置</h2>
       </div>
 
-      <div className="max-w-md space-y-4">
+      <div className="max-w-md space-y-4 overflow-y-auto pb-8">
         {loading ? (
           <p className="text-sm text-muted-foreground">加载中…</p>
         ) : (
@@ -142,7 +216,7 @@ export default function Settings({ onBack, onDataChanged }: Props) {
             <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-card">
               <div>
                 <p className="text-sm font-medium">开机自动启动</p>
-                <p className="text-xs text-muted-foreground mt-0.5">启用后 Scripter 在系统启动时自动运行</p>
+                <p className="text-xs text-muted-foreground mt-0.5">启用后 QuickKit 在系统启动时自动运行</p>
               </div>
               <Switch checked={autostart} onCheckedChange={handleToggle} />
             </div>
@@ -167,6 +241,106 @@ export default function Settings({ onBack, onDataChanged }: Props) {
               <p className="text-xs text-muted-foreground mt-2">
                 点击快捷键输入框，然后按下新的组合键。支持 Ctrl、Alt、Shift、Super 修饰键。
               </p>
+            </div>
+
+            {/* ── 云存储 ── */}
+            <div className="rounded-lg border border-border p-4 bg-card">
+              <p className="text-sm font-medium mb-3">云存储</p>
+              <p className="text-xs text-muted-foreground mb-3">
+                配置后可使用快捷键快速将剪贴板图片上传到云端，URL 自动复制到剪贴板。
+              </p>
+
+              <div className="space-y-2.5">
+                {/* Provider */}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">服务商</label>
+                  <select
+                    value={cloudConfig.provider}
+                    onChange={(e) => handleProviderChange(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    {PROVIDERS.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Endpoint */}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Endpoint (S3 兼容端点)</label>
+                  <input
+                    value={cloudConfig.endpoint}
+                    onChange={(e) => updateCloudField("endpoint", e.target.value)}
+                    placeholder={PROVIDER_PLACEHOLDERS[cloudConfig.provider]?.endpoint}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+
+                {/* Region */}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Region (区域)</label>
+                  <input
+                    value={cloudConfig.region}
+                    onChange={(e) => updateCloudField("region", e.target.value)}
+                    placeholder={PROVIDER_PLACEHOLDERS[cloudConfig.provider]?.region}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+
+                {/* Bucket */}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Bucket (存储空间名)</label>
+                  <input
+                    value={cloudConfig.bucket}
+                    onChange={(e) => updateCloudField("bucket", e.target.value)}
+                    placeholder="my-images"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+
+                {/* Access Key */}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">AccessKey</label>
+                  <input
+                    value={cloudConfig.access_key}
+                    onChange={(e) => updateCloudField("access_key", e.target.value)}
+                    placeholder="输入 AccessKey"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"
+                  />
+                </div>
+
+                {/* Secret Key */}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">SecretKey</label>
+                  <input
+                    type="password"
+                    value={cloudConfig.secret_key}
+                    onChange={(e) => updateCloudField("secret_key", e.target.value)}
+                    placeholder="输入 SecretKey"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"
+                  />
+                </div>
+
+                {/* Domain */}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Domain (公网访问域名)</label>
+                  <input
+                    value={cloudConfig.domain}
+                    onChange={(e) => updateCloudField("domain", e.target.value)}
+                    placeholder={PROVIDER_PLACEHOLDERS[cloudConfig.provider]?.domain}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+
+                <Button
+                  size="sm"
+                  className="mt-2"
+                  onClick={handleSaveCloud}
+                  disabled={savingCloud}
+                >
+                  {savingCloud ? "保存中…" : "保存配置"}
+                </Button>
+              </div>
             </div>
           </>
         )}
@@ -194,8 +368,8 @@ export default function Settings({ onBack, onDataChanged }: Props) {
         )}
       </div>
 
-      <div className="mt-auto pt-6 text-center text-xs text-muted-foreground">
-        <p>QuickSnippet v0.1.1 &middot; 基于 Tauri + Rust</p>
+      <div className="pt-6 text-center text-xs text-muted-foreground">
+        <p>QuickKit v0.1.1 &middot; 基于 Tauri + Rust</p>
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "scripter",
+  "productName": "QuickKit",
   "version": "0.1.1",
-  "identifier": "com.hover.scripter",
+  "identifier": "com.hover.quickkit",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Scripter - 脚本管理工具",
+        "title": "QuickKit - 快捷工具箱",
         "width": 960,
         "height": 680,
         "minWidth": 720,
