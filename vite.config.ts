@@ -35,12 +35,13 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
-  // 4. multi-page support: main + quicklaunch
+  // 4. multi-page support: main + quicklaunch + splashscreen
   build: {
     rollupOptions: {
       input: {
         main: "index.html",
         quicklaunch: "quicklaunch.html",
+        splashscreen: "splashscreen.html",
       },
     },
   },

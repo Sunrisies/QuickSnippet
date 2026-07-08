@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuickKit</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        height: 100%;
+        overflow: hidden;
+        background: #1e1e2e;
+        color: #cdd6f4;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .splash {
+        text-align: center;
+        animation: fadeIn 0.6s ease-out;
+      }
+
+      .logo {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 24px;
+        background: linear-gradient(135deg, #7c3aed, #a78bfa);
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 36px;
+        font-weight: 700;
+        color: #fff;
+        box-shadow: 0 8px 32px rgba(124, 58, 237, 0.35);
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      .title {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+      }
+
+      .subtitle {
+        font-size: 13px;
+        color: #a6adc8;
+        margin-bottom: 32px;
+      }
+
+      .spinner {
+        width: 28px;
+        height: 28px;
+        margin: 0 auto;
+        border: 3px solid rgba(167, 139, 250, 0.2);
+        border-top-color: #a78bfa;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to   { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50%      { transform: scale(1.05); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="splash">
+      <div class="logo">QK</div>
+      <div class="title">QuickKit</div>
+      <div class="subtitle">快捷工具箱</div>
+      <div class="spinner"></div>
+    </div>
+  </body>
+</html>

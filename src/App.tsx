@@ -5,7 +5,7 @@ import ScriptEditor from "./pages/ScriptEditor";
 import ScriptList from "./pages/ScriptList";
 import Settings from "./pages/Settings";
 import type { Folder, PageView } from "./types";
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+
 function App() {
   const [view, setView] = useState<PageView>("list");
   const [editId, setEditId] = useState<string | null>(null);
@@ -14,10 +14,7 @@ function App() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const sa = WebviewWindow.getAll().then(res => {
 
-    console.log(res, '1=1==1=11==1')
-  })
   const fetchFolders = useCallback(async () => {
     try {
       const list = await invoke<Folder[]>("list_folders");
@@ -27,7 +24,10 @@ function App() {
     }
   }, []);
 
-  useEffect(() => { fetchFolders(); }, [fetchFolders]);
+  useEffect(() => {
+    fetchFolders();
+    invoke("close_splash");
+  }, [fetchFolders]);
 
 
 

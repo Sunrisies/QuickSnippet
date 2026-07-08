@@ -523,6 +523,43 @@ async fn upload_clipboard_image(
     Ok(url)
 }
 
+// ============ Splash 命令 ============
+
+#[tauri::command]
+async fn close_splash(app: tauri::AppHandle) -> Result<(), String> {
+    // 关闭 splash 窗口
+    if let Some(splash) = app.get_webview_window("splash") {
+        let _ = splash.close();
+    }
+    // 显示主窗口，不存在则创建
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    } else {
+        if let Ok(w) = WebviewWindowBuilder::new(
+                &app,
+                "main",
+                WebviewUrl::App("index.html".into()),
+            )
+            .title("QuickKit - 快捷工具箱")
+            .inner_size(960.0, 680.0)
+            .min_inner_size(720.0, 480.0)
+            .center()
+            .build()
+        {
+            let app2 = app.clone();
+            w.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    if let Some(w) = app2.get_webview_window("main") {
+                        let _ = w.hide();
+                    }
+                }
+            });
+        }
+    }
+    Ok(())
+}
+
 // ============ 应用入口 ============
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -554,6 +591,21 @@ pub fn run() {
                 eprintln!("[QuickKit] 无法获取应用数据目录: {e}");
                 e
             })?;
+
+            // 创建启动 splash 窗口
+            let _ = WebviewWindowBuilder::new(
+                app,
+                "splash",
+                WebviewUrl::App("splashscreen.html".into()),
+            )
+            .title("")
+            .inner_size(400.0, 300.0)
+            .center()
+            .resizable(false)
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .build();
 
             let database = Database::new(app_dir).map_err(|e| {
                 eprintln!("[QuickKit] 无法初始化数据库: {e}");
@@ -790,6 +842,7 @@ pub fn run() {
             get_cloud_config,
             set_cloud_config,
             upload_clipboard_image,
+            close_splash,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
