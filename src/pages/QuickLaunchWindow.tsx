@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Script } from "../types";
 import { LANG_STYLES } from "../types";
 
@@ -66,9 +65,22 @@ export default function QuickLaunchWindow() {
 
   // 失焦隐藏
   useEffect(() => {
-    const onBlur = () => getCurrentWindow().hide().catch(() => {});
+    const onBlur = () => invoke("hide_quicklaunch");
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
+  }, []);
+
+  // 全局 ESC 关闭
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        invoke("hide_quicklaunch");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   const results = useMemo(() => search(scripts, query), [scripts, query]);
@@ -85,14 +97,14 @@ export default function QuickLaunchWindow() {
       await invoke("copy_to_clipboard", { text: script.content });
       setCopiedId(script.id);
       await new Promise((r) => setTimeout(r, 150));
-      await getCurrentWindow().hide();
+      await invoke("hide_quicklaunch");
     } catch (e) {
       console.error("复制失败:", e);
     }
   }, []);
 
   const hideWindow = useCallback(() => {
-    getCurrentWindow().hide().catch(() => {});
+    invoke("hide_quicklaunch");
   }, []);
 
   const handleKeyDown = useCallback(

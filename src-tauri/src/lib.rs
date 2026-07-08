@@ -560,6 +560,14 @@ async fn close_splash(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn hide_quicklaunch(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("quicklaunch") {
+        w.hide().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 // ============ 应用入口 ============
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -843,6 +851,7 @@ pub fn run() {
             set_cloud_config,
             upload_clipboard_image,
             close_splash,
+            hide_quicklaunch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
