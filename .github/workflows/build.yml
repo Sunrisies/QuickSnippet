@@ -5,11 +5,6 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      tag:
-        description: '手动触发时使用的版本号（例如 v0.1.0），仅用于命名产物，不会创建 git tag'
-        required: true
-        default: 'v0.1.0'
 
 permissions:
   contents: write
@@ -24,16 +19,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Resolve version tag
-        id: vars
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -55,14 +40,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ steps.vars.outputs.tag }}
-          releaseName: "QuickKit ${{ steps.vars.outputs.tag }}"
+          tagName: ${{ github.ref_name }}
+          releaseName: "QuickKit ${{ github.ref_name }}"
           releaseBody: |
-            ## QuickKit ${{ steps.vars.outputs.tag }}
+            ## QuickKit ${{ github.ref_name }}
 
             Windows 桌面端快捷工具集。
-          releaseDraft: true
-          prerelease: ${{ contains(steps.vars.outputs.tag, '-') }}
+          releaseDraft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
 
       - name: Upload installer to Qiniu
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -72,16 +57,12 @@ jobs:
           QINIU_BUCKET: ${{ secrets.QINIU_BUCKET }}
         shell: pwsh
         run: |
-          # 检查七牛云配置
           if (-not "$env:QINIU_ACCESS_KEY" -or -not "$env:QINIU_SECRET_KEY" -or -not "$env:QINIU_BUCKET") {
-            Write-Host "::warning::七牛云 secrets 未配置，跳过上传"
+            Write-Host "::warning::QINIU 未配置，跳过"
             exit 0
           }
-
-          $tag = "${{ steps.vars.outputs.tag }}"
+          $tag = "${{ github.ref_name }}"
           $bundleDir = "src-tauri\target\release\bundle"
-
-          # 查找构建产物（NSIS 安装包）
           $installers = @()
           if (Test-Path "$bundleDir\nsis") {
             Get-ChildItem "$bundleDir\nsis\*.exe" | ForEach-Object { $installers += $_ }
@@ -89,28 +70,20 @@ jobs:
           if (Test-Path "$bundleDir\msi") {
             Get-ChildItem "$bundleDir\msi\*.msi" | ForEach-Object { $installers += $_ }
           }
-
           if ($installers.Count -eq 0) {
-            Write-Host "::warning::未找到安装包文件"
+            Write-Host "::warning::未找到安装包"
             exit 0
           }
-
-          # 安装 qshell
           $qsVersion = "v2.19.7"
-          $qsZip = "qshell.zip"
-          Invoke-WebRequest -Uri "https://github.com/qiniu/qshell/releases/download/${qsVersion}/qshell-${qsVersion}-windows-amd64.zip" -OutFile $qsZip
-          Expand-Archive -Path $qsZip -DestinationPath qshell_tmp -Force
+          Invoke-WebRequest -Uri "https://github.com/qiniu/qshell/releases/download/${qsVersion}/qshell-${qsVersion}-windows-amd64.zip" -OutFile qshell.zip
+          Expand-Archive -Path qshell.zip -DestinationPath qshell_tmp -Force
           $qsBin = Get-ChildItem -Path qshell_tmp -Filter "qshell*.exe" | Select-Object -First 1
           Move-Item $qsBin.FullName "qshell.exe" -Force
-
-          # 配置七牛账号
           .\qshell.exe account --overwrite "$env:QINIU_ACCESS_KEY" "$env:QINIU_SECRET_KEY" "quickkit-ci"
-
-          # 上传每个安装包
           foreach ($installer in $installers) {
             $name = $installer.Name
             $key = "quickkit/${tag}/${name}"
-            Write-Host "→ 上传: ${name}  ⇒  qiniu://${env:QINIU_BUCKET}/${key}"
+            Write-Host "→ 上传: ${name}"
             .\qshell.exe fput --overwrite "$env:QINIU_BUCKET" "$key" $installer.FullName
           }
 
@@ -118,8 +91,6 @@ jobs:
         if: success()
         shell: bash
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
-          echo "## QuickKit $TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "## QuickKit ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ✅ Windows 安装包已构建" >> "$GITHUB_STEP_SUMMARY"
-          echo "- 📦 GitHub Release: 以 draft 形式创建" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ✅ Windows 安装包已构建并发布" >> "$GITHUB_STEP_SUMMARY"
