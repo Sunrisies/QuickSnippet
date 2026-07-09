@@ -227,16 +227,13 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
                 let _ = w.show();
                 let _ = w.set_focus();
             } else {
-                if let Ok(w) = WebviewWindowBuilder::new(
-                        app,
-                        "main",
-                        WebviewUrl::App("index.html".into()),
-                    )
-                    .title("QuickKit - 快捷工具箱")
-                    .inner_size(960.0, 680.0)
-                    .min_inner_size(720.0, 480.0)
-                    .center()
-                    .build()
+                if let Ok(w) =
+                    WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                        .title("QuickKit - 快捷工具箱")
+                        .inner_size(960.0, 680.0)
+                        .min_inner_size(720.0, 480.0)
+                        .center()
+                        .build()
                 {
                     let app2 = app.clone();
                     w.on_window_event(move |event| {
@@ -250,7 +247,25 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
             }
         }
         "upload_image" => {
-            // 由前端调用 upload_clipboard_image 命令
+            let app_handle = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let db = app_handle.state::<Database>();
+                let config = match db.get_cloud_config() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("[QuickKit] 读取云配置失败: {e}");
+                        return;
+                    }
+                };
+                match uploader::upload_clipboard_image(&config).await {
+                    Ok(url) => {
+                        if clipboard_win::set_clipboard_string(&url).is_ok() {
+                            eprintln!("[QuickKit] 图片已上传到: {url}");
+                        }
+                    }
+                    Err(e) => eprintln!("[QuickKit] 上传失败: {e}"),
+                }
+            });
         }
         _ => {}
     }
@@ -536,11 +551,7 @@ async fn close_splash(app: tauri::AppHandle) -> Result<(), String> {
         let _ = w.show();
         let _ = w.set_focus();
     } else {
-        if let Ok(w) = WebviewWindowBuilder::new(
-                &app,
-                "main",
-                WebviewUrl::App("index.html".into()),
-            )
+        if let Ok(w) = WebviewWindowBuilder::new(&app, "main", WebviewUrl::App("index.html".into()))
             .title("QuickKit - 快捷工具箱")
             .inner_size(960.0, 680.0)
             .min_inner_size(720.0, 480.0)
@@ -684,46 +695,44 @@ pub fn run() {
                 .icon(tray_img)
                 .menu(&menu)
                 .tooltip("QuickKit")
-                .on_menu_event(|app, event| {
-                    match event.id().as_ref() {
-                        "main" => {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            } else {
-                                if let Ok(w) = WebviewWindowBuilder::new(
-                                        app,
-                                        "main",
-                                        WebviewUrl::App("index.html".into()),
-                                    )
-                                    .title("QuickKit - 快捷工具箱")
-                                    .inner_size(960.0, 680.0)
-                                    .min_inner_size(720.0, 480.0)
-                                    .center()
-                                    .build()
-                                {
-                                    let app2 = app.clone();
-                                    w.on_window_event(move |event| {
-                                        if let tauri::WindowEvent::CloseRequested { .. } = event {
-                                            if let Some(w) = app2.get_webview_window("main") {
-                                                let _ = w.hide();
-                                            }
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "main" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        } else {
+                            if let Ok(w) = WebviewWindowBuilder::new(
+                                app,
+                                "main",
+                                WebviewUrl::App("index.html".into()),
+                            )
+                            .title("QuickKit - 快捷工具箱")
+                            .inner_size(960.0, 680.0)
+                            .min_inner_size(720.0, 480.0)
+                            .center()
+                            .build()
+                            {
+                                let app2 = app.clone();
+                                w.on_window_event(move |event| {
+                                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                                        if let Some(w) = app2.get_webview_window("main") {
+                                            let _ = w.hide();
                                         }
-                                    });
-                                }
+                                    }
+                                });
                             }
                         }
-                        "quicklaunch" => {
-                            if let Some(w) = app.get_webview_window("quicklaunch") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
-                        }
-                        "quit" => {
-                            app.exit(0);
-                        }
-                        _ => {}
                     }
+                    "quicklaunch" => {
+                        if let Some(w) = app.get_webview_window("quicklaunch") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
@@ -754,16 +763,13 @@ pub fn run() {
                 });
             } else {
                 // setup 时主窗口不存在则创建（dev 模式兜底）
-                if let Ok(main_window) = WebviewWindowBuilder::new(
-                        app,
-                        "main",
-                        WebviewUrl::App("index.html".into()),
-                    )
-                    .title("QuickKit - 快捷工具箱")
-                    .inner_size(960.0, 680.0)
-                    .min_inner_size(720.0, 480.0)
-                    .center()
-                    .build()
+                if let Ok(main_window) =
+                    WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                        .title("QuickKit - 快捷工具箱")
+                        .inner_size(960.0, 680.0)
+                        .min_inner_size(720.0, 480.0)
+                        .center()
+                        .build()
                 {
                     let app_handle2 = app.handle().clone();
                     main_window.on_window_event(move |event| {
