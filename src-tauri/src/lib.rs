@@ -249,21 +249,37 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
         "upload_image" => {
             let app_handle = app.clone();
             tauri::async_runtime::spawn(async move {
+                use tauri_plugin_notification::NotificationExt;
+
                 let db = app_handle.state::<Database>();
                 let config = match db.get_cloud_config() {
                     Ok(c) => c,
                     Err(e) => {
-                        eprintln!("[QuickKit] 读取云配置失败: {e}");
+                        let _ = app_handle.notification()
+                            .builder()
+                            .title("QuickKit - 上传失败")
+                            .body(format!("读取云配置失败: {e}"))
+                            .show();
                         return;
                     }
                 };
                 match uploader::upload_clipboard_image(&config).await {
                     Ok(url) => {
                         if clipboard_win::set_clipboard_string(&url).is_ok() {
-                            eprintln!("[QuickKit] 图片已上传到: {url}");
+                            let _ = app_handle.notification()
+                                .builder()
+                                .title("QuickKit - 上传成功")
+                                .body(format!("{} 已复制到剪贴板", url))
+                                .show();
                         }
                     }
-                    Err(e) => eprintln!("[QuickKit] 上传失败: {e}"),
+                    Err(e) => {
+                        let _ = app_handle.notification()
+                            .builder()
+                            .title("QuickKit - 上传失败")
+                            .body(format!("{e}"))
+                            .show();
+                    }
                 }
             });
         }
@@ -587,6 +603,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, shortcut, event| {
