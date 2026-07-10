@@ -4,12 +4,20 @@ use qiniu_sdk::upload::{
     AutoUploader, AutoUploaderObjectParams, UploadManager, UploadTokenSigner,
     apis::credential::Credential,
 };
+use serde::Serialize;
 use std::time::Duration;
 
 const TOKEN_EXPIRY_SECS: u64 = 3600;
 
+#[derive(Debug, Serialize)]
+pub struct UploadResult {
+    pub url: String,
+    pub filename: String,
+    pub file_size: u64,
+}
+
 /// 从剪贴板读取图片并上传到七牛云，返回可访问的 URL
-pub async fn upload_clipboard_image(config: &CloudConfig) -> Result<String, String> {
+pub async fn upload_clipboard_image(config: &CloudConfig) -> Result<UploadResult, String> {
     // 1. 验证配置
     if config.access_key.is_empty() || config.secret_key.is_empty() || config.bucket.is_empty() {
         return Err("云存储配置不完整，请在设置页填写".to_string());
@@ -74,7 +82,8 @@ pub async fn upload_clipboard_image(config: &CloudConfig) -> Result<String, Stri
     let response = result.map_err(|e| format!("上传失败: {}", e))?;
     let key = response["key"].as_str().unwrap_or(&object_key);
 
-    // 9. 返回完整 URL
+    // 9. 返回完整 URL 和文件信息
     let domain = config.domain.trim_end_matches('/');
-    Ok(format!("{}/{}", domain, key))
+    let url = format!("{}/{}", domain, key);
+    Ok(UploadResult { url, filename: object_key, file_size: png_bytes.len() as u64 })
 }

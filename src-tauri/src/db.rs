@@ -51,6 +51,15 @@ pub struct ImportScript {
     pub folder_name: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UploadRecord {
+    pub id: String,
+    pub url: String,
+    pub filename: String,
+    pub file_size: u64,
+    pub created_at: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct CloudConfig {
     pub provider: String,     // "qiniu" | "aliyun" | "s3"
@@ -97,6 +106,14 @@ impl Database {
             );
 
             INSERT OR IGNORE INTO settings (key, value) VALUES ('autostart', 'false');
+
+            CREATE TABLE IF NOT EXISTS uploads (
+                id          TEXT PRIMARY KEY,
+                url         TEXT NOT NULL,
+                filename    TEXT NOT NULL,
+                file_size   INTEGER NOT NULL,
+                created_at  TEXT NOT NULL
+            );
             ",
         )
         .map_err(|e| e.to_string())?;
@@ -391,6 +408,55 @@ impl Database {
             params![json],
         )
         .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    // ============ 导入导出 ============
+
+    /// 添加上传记录
+    pub fn add_upload(&self, url: &str, filename: &str, file_size: u64) -> Result<UploadRecord, String> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO uploads (id, url, filename, file_size, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, url, filename, file_size, now],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(UploadRecord { id, url: url.to_string(), filename: filename.to_string(), file_size, created_at: now })
+    }
+
+    /// 获取上传历史
+    pub fn list_uploads(&self) -> Result<Vec<UploadRecord>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, url, filename, file_size, created_at FROM uploads ORDER BY created_at DESC LIMIT 100")
+            .map_err(|e| e.to_string())?;
+        let records = stmt
+            .query_map([], |row| {
+                Ok(UploadRecord {
+                    id: row.get(0)?,
+                    url: row.get(1)?,
+                    filename: row.get(2)?,
+                    file_size: row.get(3)?,
+                    created_at: row.get(4)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(records)
+    }
+
+    /// 删除上传记录
+    pub fn delete_upload(&self, id: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let rows = conn
+            .execute("DELETE FROM uploads WHERE id=?1", params![id])
+            .map_err(|e| e.to_string())?;
+        if rows == 0 {
+            return Err("记录不存在".to_string());
+        }
         Ok(())
     }
 

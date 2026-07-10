@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import ScriptEditor from "./pages/ScriptEditor";
 import ScriptList from "./pages/ScriptList";
 import Settings from "./pages/Settings";
+import UploadHistory from "./pages/UploadHistory";
 import type { Folder, PageView } from "./types";
 
 function App() {
@@ -70,6 +71,9 @@ function App() {
           </Button>
           <Button variant={view === "settings" ? "default" : "ghost"} className="justify-start gap-2" onClick={() => setView("settings")}>
             <span>⚙️</span> 设置
+          </Button>
+          <Button variant={view === "history" ? "default" : "ghost"} className="justify-start gap-2" onClick={() => setView("history")}>
+            <span>🖼️</span> 上传
           </Button>
         </nav>
 
@@ -140,6 +144,7 @@ function App() {
           />
         )}
         {view === "settings" && <Settings onBack={() => setView("list")} onDataChanged={fetchFolders} />}
+        {view === "history" && <UploadHistory />}
       </main>
     </div>
   );

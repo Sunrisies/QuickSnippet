@@ -3,7 +3,7 @@ mod db;
 mod executor;
 mod uploader;
 
-use db::{CloudConfig, Database, Folder, Script};
+use db::{CloudConfig, Database, Folder, Script, UploadRecord};
 use executor::ExecutionResult;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WebviewUrl, WebviewWindowBuilder,
+    Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 use tauri_plugin_global_shortcut::{
     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState as GsState,
@@ -264,12 +264,14 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
                     }
                 };
                 match uploader::upload_clipboard_image(&config).await {
-                    Ok(url) => {
-                        if clipboard_win::set_clipboard_string(&url).is_ok() {
+                    Ok(result) => {
+                        let _ = db.add_upload(&result.url, &result.filename, result.file_size);
+                        let _ = app_handle.emit("upload-complete", ());
+                        if clipboard_win::set_clipboard_string(&result.url).is_ok() {
                             let _ = app_handle.notification()
                                 .builder()
                                 .title("QuickKit - 上传成功")
-                                .body(format!("{} 已复制到剪贴板", url))
+                                .body(format!("{} 已复制到剪贴板", result.url))
                                 .show();
                         }
                     }
@@ -543,15 +545,30 @@ fn set_cloud_config(db: tauri::State<'_, Database>, config: CloudConfig) -> Resu
 #[tauri::command]
 async fn upload_clipboard_image(
     db: tauri::State<'_, Database>,
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
 ) -> Result<String, String> {
     let config = db.get_cloud_config()?;
-    let url = uploader::upload_clipboard_image(&config).await?;
+    let result = uploader::upload_clipboard_image(&config).await?;
+
+    // 记录到数据库
+    let _ = db.add_upload(&result.url, &result.filename, result.file_size);
+    let _ = app.emit("upload-complete", ());
 
     // 将 URL 复制到剪贴板
-    clipboard_win::set_clipboard_string(&url).map_err(|e| format!("写入剪贴板失败: {}", e))?;
+    clipboard_win::set_clipboard_string(&result.url)
+        .map_err(|e| format!("写入剪贴板失败: {}", e))?;
 
-    Ok(url)
+    Ok(result.url)
+}
+
+#[tauri::command]
+fn get_upload_history(db: tauri::State<'_, Database>) -> Result<Vec<UploadRecord>, String> {
+    db.list_uploads()
+}
+
+#[tauri::command]
+fn delete_upload(db: tauri::State<'_, Database>, id: String) -> Result<(), String> {
+    db.delete_upload(&id)
 }
 
 // ============ Splash 命令 ============
@@ -873,6 +890,8 @@ pub fn run() {
             get_cloud_config,
             set_cloud_config,
             upload_clipboard_image,
+            get_upload_history,
+            delete_upload,
             close_splash,
             hide_quicklaunch,
         ])

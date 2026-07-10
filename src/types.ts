@@ -22,7 +22,7 @@ export interface ExecutionResult {
   elapsed_ms: number;
 }
 
-export type PageView = "list" | "editor" | "settings";
+export type PageView = "list" | "editor" | "settings" | "history";
 
 export const LANGUAGES = [
   { value: "javascript", label: "JavaScript" },
