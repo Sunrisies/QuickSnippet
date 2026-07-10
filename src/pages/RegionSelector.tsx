@@ -103,10 +103,8 @@ export default function RegionSelector() {
     try {
       // await invoke("set_selected_region", { region });
 
-      const openPromise = invoke("open_recording_frame", { region });
-      await openPromise.finally(() => {
-        console.log("打开录制窗口完成")
-      })
+      await invoke("open_recording_frame", { region });
+
       // await invoke("close_region_selector");
     } catch (e) {
       console.error("确认选区失败:", e);

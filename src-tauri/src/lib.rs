@@ -736,7 +736,7 @@ fn open_region_selector(app: tauri::AppHandle) -> Result<(), String> {
     // 仅主屏幕，不覆盖副屏
     let (w, h) = get_primary_screen_size(&app);
 
-    let window = tauri::WebviewWindowBuilder::new(
+    let _window = tauri::WebviewWindowBuilder::new(
         &app,
         "region_selector",
         tauri::WebviewUrl::App("region-select.html".into()),
@@ -768,28 +768,40 @@ fn close_region_selector(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn open_recording_frame(app: tauri::AppHandle, region: ScreenRegion) -> Result<(), String> {
     println!("打开录制框{:?}", region);
-    // 关闭选区窗口
-    if let Some(w) = app.get_webview_window("region_selector") {
-        println!("关闭选区窗口");
-        let _ = w.close();
-    }
-    let _w = tauri::WebviewWindowBuilder::new(
-        &app,
-        "recording_frame",
-        tauri::WebviewUrl::App("recording-frame.html".into()),
-    )
-    .title("")
-    .position(region.x as f64, region.y as f64)
-    .inner_size(region.w as f64, region.h as f64)
-    .decorations(false)
-    .transparent(true)
-    .always_on_top(true)
-    .skip_taskbar(false)
-    .devtools(true)
-    .build()
-    .map_err(|e| format!("创建录制框窗口失败: {e}"))?;
-    println!("关闭选区窗口--");
+    tauri::async_runtime::spawn(async move {
+        // 关闭选区窗口
+        if let Some(w) = app.get_webview_window("region_selector") {
+            println!("关闭选区窗口");
+            let _ = w.close();
+        }
 
+        match tauri::WebviewWindowBuilder::new(
+            &app,
+            "recording_frame",
+            tauri::WebviewUrl::App("recording-frame.html".into()),
+        )
+        .title("")
+        .position(100.0, 100.0)
+        .inner_size(800.0, 600.0)
+        // .position(region.x as f64, region.y as f64)
+        // .inner_size(region.w as f64, region.h as f64)
+        .decorations(false)
+        // .transparent(true)
+        // .always_on_top(true)
+        // .skip_taskbar(false)
+        // .shadow(false)
+        // .devtools(true)
+        .build()
+        {
+            Ok(window) => {
+                window.open_devtools();
+                println!("录制窗口创建成功");
+            }
+            Err(e) => {
+                eprintln!("创建录制窗口失败: {}", e);
+            }
+        }
+    });
     Ok(())
 }
 
@@ -1048,7 +1060,9 @@ pub fn run() {
                 })
                 .build(app)?;
             app.manage(tray_icon);
-
+            // 先获取当前有几个窗口
+            let mut windows = app.webview_windows();
+            println!("当前窗口数量: {}", windows.len());
             // 主窗口关闭时最小化到托盘
             if let Some(main_window) = app.get_webview_window("main") {
                 let app_handle2 = app.handle().clone();
