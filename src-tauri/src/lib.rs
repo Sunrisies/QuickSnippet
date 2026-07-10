@@ -2,6 +2,7 @@ mod autostart;
 mod db;
 mod executor;
 mod uploader;
+mod apps;
 
 use db::{CloudConfig, Database, Folder, Script, UploadRecord};
 use executor::ExecutionResult;
@@ -29,6 +30,18 @@ pub struct ShortcutInfo {
     pub action: String,
     pub shortcut: String,
     pub label: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct ScreenRegion {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+}
+
+pub struct RegionState {
+    pub region: Mutex<Option<ScreenRegion>>,
 }
 
 /// 将 Shortcut 对象格式化为 "Ctrl+P" 形式
@@ -285,6 +298,14 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
                 }
             });
         }
+        "select_region" => {
+            let w = app.get_webview_window("region_selector");
+            if let Some(window) = w {
+                let _ = window.set_focus();
+            } else {
+                let _ = open_region_selector(app.clone());
+            }
+        }
         _ => {}
     }
 }
@@ -466,7 +487,7 @@ fn get_shortcuts(db: tauri::State<'_, Database>) -> Result<Vec<ShortcutInfo>, St
         })
         .collect();
     // 按默认顺序排序
-    let default_order: Vec<&str> = vec!["toggle_quicklaunch", "show_main", "upload_image"];
+    let default_order: Vec<&str> = vec!["toggle_quicklaunch", "show_main", "upload_image", "select_region"];
     result.sort_by_key(|s| {
         default_order
             .iter()
@@ -612,6 +633,94 @@ fn hide_quicklaunch(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// ============ 应用管理命令 ============
+
+#[tauri::command]
+fn list_apps() -> Result<Vec<apps::AppEntry>, String> {
+    apps::list_apps()
+}
+
+#[tauri::command]
+fn launch_app(path: String) -> Result<(), String> {
+    apps::activate_or_launch(&path)
+}
+
+#[tauri::command]
+fn set_selected_region(state: tauri::State<'_, RegionState>, region: ScreenRegion) -> Result<(), String> {
+    *state.region.lock().map_err(|e| e.to_string())? = Some(region);
+    Ok(())
+}
+
+#[tauri::command]
+fn open_region_selector(app: tauri::AppHandle) -> Result<(), String> {
+    // 获取虚拟桌面尺寸（覆盖所有显示器）
+    let (x, y, w, h) = get_virtual_screen_bounds();
+
+    let window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "region_selector",
+        tauri::WebviewUrl::App("region-select.html".into()),
+    )
+    .title("")
+    .position(x as f64, y as f64)
+    .inner_size(w as f64, h as f64)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .build()
+    .map_err(|e| format!("创建选区窗口失败: {}", e))?;
+
+    // 失焦自动关闭（点副屏或切换窗口时）
+    let app2 = app.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::Focused(false) = event {
+            if let Some(w) = app2.get_webview_window("region_selector") {
+                let _ = w.close();
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+fn close_region_selector(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("region_selector") {
+        w.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// 获取虚拟桌面（所有显示器）的坐标和尺寸
+fn get_virtual_screen_bounds() -> (i32, i32, i32, i32) {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::GetSystemMetrics;
+        const SM_XVIRTUALSCREEN: i32 = 76;
+        const SM_YVIRTUALSCREEN: i32 = 77;
+        const SM_CXVIRTUALSCREEN: i32 = 78;
+        const SM_CYVIRTUALSCREEN: i32 = 79;
+        unsafe {
+            let x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+            let y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+            let w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+            let h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+            // 单屏时 GetSystemMetrics 可能返回 0
+            if w == 0 || h == 0 {
+                // 回退到主屏幕
+                (0, 0, GetSystemMetrics(0), GetSystemMetrics(1))
+            } else {
+                (x, y, w, h)
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        (0, 0, 1920, 1080)
+    }
+}
+
 // ============ 应用入口 ============
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -701,6 +810,7 @@ pub fn run() {
 
             app.manage(database);
             app.manage(manager);
+            app.manage(RegionState { region: Mutex::new(None) });
 
             // ── 系统托盘 ──
             let show_item = MenuItemBuilder::with_id("main", "打开主界面").build(app)?;
@@ -894,6 +1004,11 @@ pub fn run() {
             delete_upload,
             close_splash,
             hide_quicklaunch,
+            list_apps,
+            launch_app,
+            set_selected_region,
+            open_region_selector,
+            close_region_selector,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

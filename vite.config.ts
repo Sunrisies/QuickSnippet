@@ -42,6 +42,7 @@ export default defineConfig(async () => ({
         main: "index.html",
         quicklaunch: "quicklaunch.html",
         splashscreen: "splashscreen.html",
+        regionselect: "region-select.html",
       },
     },
   },

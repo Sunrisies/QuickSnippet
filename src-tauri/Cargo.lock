@@ -3868,6 +3868,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-shell",
  "uuid",
+ "walkdir",
  "windows-sys 0.61.2",
  "winreg 0.10.1",
 ]
