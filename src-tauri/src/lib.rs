@@ -1,8 +1,9 @@
+mod apps;
 mod autostart;
 mod db;
 mod executor;
+mod recorder;
 mod uploader;
-mod apps;
 
 use db::{CloudConfig, Database, Folder, Script, UploadRecord};
 use executor::ExecutionResult;
@@ -12,7 +13,7 @@ use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
+    Emitter, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 use tauri_plugin_global_shortcut::{
     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState as GsState,
@@ -268,7 +269,8 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
                 let config = match db.get_cloud_config() {
                     Ok(c) => c,
                     Err(e) => {
-                        let _ = app_handle.notification()
+                        let _ = app_handle
+                            .notification()
                             .builder()
                             .title("QuickKit - 上传失败")
                             .body(format!("读取云配置失败: {e}"))
@@ -281,7 +283,8 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
                         let _ = db.add_upload(&result.url, &result.filename, result.file_size);
                         let _ = app_handle.emit("upload-complete", ());
                         if clipboard_win::set_clipboard_string(&result.url).is_ok() {
-                            let _ = app_handle.notification()
+                            let _ = app_handle
+                                .notification()
                                 .builder()
                                 .title("QuickKit - 上传成功")
                                 .body(format!("{} 已复制到剪贴板", result.url))
@@ -289,7 +292,8 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
                         }
                     }
                     Err(e) => {
-                        let _ = app_handle.notification()
+                        let _ = app_handle
+                            .notification()
                             .builder()
                             .title("QuickKit - 上传失败")
                             .body(format!("{e}"))
@@ -304,6 +308,72 @@ fn execute_shortcut_action(app: &tauri::AppHandle, action: &str) {
                 let _ = window.set_focus();
             } else {
                 let _ = open_region_selector(app.clone());
+            }
+        }
+        "toggle_recording" => {
+            use tauri_plugin_notification::NotificationExt;
+            let state = app.state::<recorder::RecordingSession>();
+            let has_active = state
+                .handle
+                .lock()
+                .ok()
+                .map(|h| h.is_some())
+                .unwrap_or(false);
+            if has_active {
+                let mut handle = state.handle.lock().ok().and_then(|mut h| h.take());
+                if let Some(ref mut h) = handle {
+                    match recorder::stop_recording(h) {
+                        Ok(path) => {
+                            let _ = app
+                                .notification()
+                                .builder()
+                                .title("QuickKit - 录制完成")
+                                .body(format!("视频已保存到:\n{}", path))
+                                .show();
+                        }
+                        Err(e) => {
+                            let _ = app
+                                .notification()
+                                .builder()
+                                .title("QuickKit - 停止录制失败")
+                                .body(format!("{e}"))
+                                .show();
+                        }
+                    }
+                }
+            } else {
+                let region_state = app.state::<RegionState>();
+                let region = region_state.region.lock().ok().and_then(|r| r.clone());
+                if let Some(region) = region {
+                    match recorder::start_recording(&region) {
+                        Ok(handle) => {
+                            if let Ok(mut h) = state.handle.lock() {
+                                *h = Some(handle);
+                            }
+                            let _ = app
+                                .notification()
+                                .builder()
+                                .title("QuickKit - 录制中")
+                                .body("区域录屏已开始，按 Ctrl+Shift+F9 停止")
+                                .show();
+                        }
+                        Err(e) => {
+                            let _ = app
+                                .notification()
+                                .builder()
+                                .title("QuickKit - 录制失败")
+                                .body(format!("{e}\n请确认已安装 FFmpeg 并加入 PATH"))
+                                .show();
+                        }
+                    }
+                } else {
+                    let _ = app
+                        .notification()
+                        .builder()
+                        .title("QuickKit - 无法录制")
+                        .body("请先按 Ctrl+Shift+R 框选录制区域")
+                        .show();
+                }
             }
         }
         _ => {}
@@ -487,7 +557,13 @@ fn get_shortcuts(db: tauri::State<'_, Database>) -> Result<Vec<ShortcutInfo>, St
         })
         .collect();
     // 按默认顺序排序
-    let default_order: Vec<&str> = vec!["toggle_quicklaunch", "show_main", "upload_image", "select_region"];
+    let default_order: Vec<&str> = vec![
+        "toggle_quicklaunch",
+        "show_main",
+        "upload_image",
+        "select_region",
+        "toggle_recording",
+    ];
     result.sort_by_key(|s| {
         default_order
             .iter()
@@ -646,15 +722,19 @@ fn launch_app(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_selected_region(state: tauri::State<'_, RegionState>, region: ScreenRegion) -> Result<(), String> {
+fn set_selected_region(
+    state: tauri::State<'_, RegionState>,
+    region: ScreenRegion,
+) -> Result<(), String> {
+    println!("点击确定");
     *state.region.lock().map_err(|e| e.to_string())? = Some(region);
     Ok(())
 }
 
 #[tauri::command]
 fn open_region_selector(app: tauri::AppHandle) -> Result<(), String> {
-    // 获取虚拟桌面尺寸（覆盖所有显示器）
-    let (x, y, w, h) = get_virtual_screen_bounds();
+    // 仅主屏幕，不覆盖副屏
+    let (w, h) = get_primary_screen_size(&app);
 
     let window = tauri::WebviewWindowBuilder::new(
         &app,
@@ -662,34 +742,103 @@ fn open_region_selector(app: tauri::AppHandle) -> Result<(), String> {
         tauri::WebviewUrl::App("region-select.html".into()),
     )
     .title("")
-    .position(x as f64, y as f64)
+    .position(0.0, 0.0)
     .inner_size(w as f64, h as f64)
     .decorations(false)
     .transparent(true)
     .always_on_top(true)
-    .skip_taskbar(true)
+    .skip_taskbar(false)
+    .devtools(true)
+    .shadow(false)
     .build()
     .map_err(|e| format!("创建选区窗口失败: {}", e))?;
-
-    // 失焦自动关闭（点副屏或切换窗口时）
-    let app2 = app.clone();
-    window.on_window_event(move |event| {
-        if let tauri::WindowEvent::Focused(false) = event {
-            if let Some(w) = app2.get_webview_window("region_selector") {
-                let _ = w.close();
-            }
-        }
-    });
-
     Ok(())
 }
 
 #[tauri::command]
 fn close_region_selector(app: tauri::AppHandle) -> Result<(), String> {
+    println!("取消");
     if let Some(w) = app.get_webview_window("region_selector") {
         w.close().map_err(|e| e.to_string())?;
     }
+    println!("取消成功");
     Ok(())
+}
+
+#[tauri::command]
+fn open_recording_frame(app: tauri::AppHandle, region: ScreenRegion) -> Result<(), String> {
+    println!("打开录制框{:?}", region);
+    // 关闭选区窗口
+    if let Some(w) = app.get_webview_window("region_selector") {
+        println!("关闭选区窗口");
+        let _ = w.close();
+    }
+    let _w = tauri::WebviewWindowBuilder::new(
+        &app,
+        "recording_frame",
+        tauri::WebviewUrl::App("recording-frame.html".into()),
+    )
+    .title("")
+    .position(region.x as f64, region.y as f64)
+    .inner_size(region.w as f64, region.h as f64)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(false)
+    .devtools(true)
+    .build()
+    .map_err(|e| format!("创建录制框窗口失败: {e}"))?;
+    println!("关闭选区窗口--");
+
+    Ok(())
+}
+
+#[tauri::command]
+fn start_recording(
+    state: tauri::State<'_, recorder::RecordingSession>,
+    region_state: tauri::State<'_, RegionState>,
+) -> Result<String, String> {
+    let region = region_state.region.lock().map_err(|e| e.to_string())?;
+    let region = region.as_ref().ok_or("请先框选录制区域 (Ctrl+Shift+R)")?;
+    let handle = recorder::start_recording(region)?;
+    *state.handle.lock().map_err(|e| e.to_string())? = Some(handle);
+    Ok("录制已开始".to_string())
+}
+
+#[tauri::command]
+fn stop_recording(state: tauri::State<'_, recorder::RecordingSession>) -> Result<String, String> {
+    let mut handle = state
+        .handle
+        .lock()
+        .map_err(|e| e.to_string())?
+        .take()
+        .ok_or("没有正在进行的录制")?;
+    let path = recorder::stop_recording(&mut handle)?;
+    Ok(path)
+}
+
+/// 获取主屏幕尺寸
+fn get_primary_screen_size(app: &tauri::AppHandle) -> (i32, i32) {
+    #[cfg(windows)]
+    {
+        // use windows_sys::Win32::UI::WindowsAndMessaging::GetSystemMetrics;
+        // unsafe { (GetSystemMetrics(0), GetSystemMetrics(1)) }
+        let app_handle = app.app_handle();
+        let monitor = app_handle
+            .primary_monitor()
+            .expect("获取主显示器失败")
+            .expect("未找到主显示器");
+
+        let scale = monitor.scale_factor();
+        let physical_size = monitor.size();
+        let w = physical_size.width as f64 / scale;
+        let h = physical_size.height as f64 / scale;
+        (w as i32, h as i32)
+    }
+    #[cfg(not(windows))]
+    {
+        (1920, 1080)
+    }
 }
 
 /// 获取虚拟桌面（所有显示器）的坐标和尺寸
@@ -810,7 +959,12 @@ pub fn run() {
 
             app.manage(database);
             app.manage(manager);
-            app.manage(RegionState { region: Mutex::new(None) });
+            app.manage(RegionState {
+                region: Mutex::new(None),
+            });
+            app.manage(recorder::RecordingSession {
+                handle: Mutex::new(None),
+            });
 
             // ── 系统托盘 ──
             let show_item = MenuItemBuilder::with_id("main", "打开主界面").build(app)?;
@@ -1009,6 +1163,9 @@ pub fn run() {
             set_selected_region,
             open_region_selector,
             close_region_selector,
+            open_recording_frame,
+            start_recording,
+            stop_recording,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

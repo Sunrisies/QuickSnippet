@@ -37,4 +37,6 @@ qiniu-sdk = { version = "0.2.4", features = ["upload", "async", "reqwest"] }
 raw-window-handle = "0.6"
 windows-sys = { version = "0.61", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Diagnostics_ToolHelp"] }
 walkdir = "2"
+xcap = "0.4"
+ffmpeg-sidecar = "1"
 

@@ -319,6 +319,7 @@ impl Database {
         m.insert("show_main".to_string(), "Ctrl+Shift+Space".to_string());
         m.insert("upload_image".to_string(), "Ctrl+Shift+U".to_string());
         m.insert("select_region".to_string(), "Ctrl+Shift+R".to_string());
+        m.insert("toggle_recording".to_string(), "Ctrl+Shift+F9".to_string());
         m
     }
 
@@ -329,6 +330,7 @@ impl Database {
         m.insert("show_main".to_string(), "打开主界面".to_string());
         m.insert("upload_image".to_string(), "剪贴板图片上传".to_string());
         m.insert("select_region".to_string(), "框选录制区域".to_string());
+        m.insert("toggle_recording".to_string(), "开始/停止录屏".to_string());
         m
     }
 

@@ -43,6 +43,7 @@ export default defineConfig(async () => ({
         quicklaunch: "quicklaunch.html",
         splashscreen: "splashscreen.html",
         regionselect: "region-select.html",
+        recordingframe: "recording-frame.html",
       },
     },
   },
