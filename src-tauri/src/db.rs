@@ -469,10 +469,31 @@ impl Database {
             Ok(Folder { id: row.get(0)?, name: row.get(1)?, created_at: row.get(2)?, updated_at: row.get(3)? })
         }).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
 
+        // 构建 folder_id → name 映射，用于导出时附带文件夹名
+        let folder_name_map: std::collections::HashMap<String, String> = folders
+            .iter()
+            .map(|f| (f.id.clone(), f.name.clone()))
+            .collect();
+
         let mut stmt = conn.prepare("SELECT id, name, content, language, folder_id, created_at, updated_at FROM scripts ORDER BY updated_at DESC").map_err(|e| e.to_string())?;
-        let scripts: Vec<Script> = stmt.query_map([], |row| {
+        let raw_scripts: Vec<Script> = stmt.query_map([], |row| {
             Ok(Script { id: row.get(0)?, name: row.get(1)?, content: row.get(2)?, language: row.get(3)?, folder_id: row.get(4)?, created_at: row.get(5)?, updated_at: row.get(6)? })
         }).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
+
+        // 把 raw_scripts 转为带 folder_name 的 JSON 值
+        let scripts: Vec<serde_json::Value> = raw_scripts
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "name": s.name,
+                    "content": s.content,
+                    "language": s.language,
+                    "folder_name": s.folder_id.as_ref().and_then(|id| folder_name_map.get(id)),
+                    "created_at": s.created_at,
+                    "updated_at": s.updated_at,
+                })
+            })
+            .collect();
 
         let export = serde_json::json!({
             "version": 1,

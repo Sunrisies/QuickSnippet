@@ -207,27 +207,27 @@ export default function Settings({ onBack, onDataChanged }: Props) {
         <h2 className="text-lg font-semibold">设置</h2>
       </div>
 
-      <div className="max-w-md space-y-4 overflow-y-auto pb-8">
+      <div className="space-y-4 overflow-y-auto pb-8">
         {loading ? (
           <p className="text-sm text-muted-foreground">加载中…</p>
         ) : (
           <>
             {/* ── 开机自启 ── */}
-            <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-card">
+            <div className="flex items-center justify-between rounded-xl border border-zinc-200/70 p-4 bg-white shadow-card">
               <div>
-                <p className="text-sm font-medium">开机自动启动</p>
-                <p className="text-xs text-muted-foreground mt-0.5">启用后 QuickKit 在系统启动时自动运行</p>
+                <p className="text-sm font-medium text-zinc-800">开机自动启动</p>
+                <p className="text-xs text-zinc-400 mt-0.5">启用后 QuickKit 在系统启动时自动运行</p>
               </div>
               <Switch checked={autostart} onCheckedChange={handleToggle} />
             </div>
 
             {/* ── 快捷键 ── */}
-            <div className="rounded-lg border border-border p-4 bg-card">
-              <p className="text-sm font-medium mb-3">快捷键</p>
+            <div className="rounded-xl border border-zinc-200/70 p-4 bg-white shadow-card">
+              <p className="text-sm font-medium text-zinc-800 mb-3">快捷键</p>
               <div className="space-y-3">
                 {shortcuts.map((sc) => (
                   <div key={sc.action}>
-                    <p className="text-xs text-muted-foreground mb-1">{sc.label}</p>
+                    <p className="text-xs text-zinc-400 mb-1">{sc.label}</p>
                     <KeyCapture
                       value={sc.shortcut}
                       onChange={(newShortcut) =>
@@ -238,26 +238,26 @@ export default function Settings({ onBack, onDataChanged }: Props) {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="text-xs text-zinc-400 mt-2">
                 点击快捷键输入框，然后按下新的组合键。支持 Ctrl、Alt、Shift、Super 修饰键。
               </p>
             </div>
 
             {/* ── 云存储 ── */}
-            <div className="rounded-lg border border-border p-4 bg-card">
-              <p className="text-sm font-medium mb-3">云存储</p>
-              <p className="text-xs text-muted-foreground mb-3">
+            <div className="rounded-xl border border-zinc-200/70 p-4 bg-white shadow-card">
+              <p className="text-sm font-medium text-zinc-800 mb-3">云存储</p>
+              <p className="text-xs text-zinc-400 mb-3">
                 配置后可使用快捷键快速将剪贴板图片上传到云端，URL 自动复制到剪贴板。
               </p>
 
               <div className="space-y-2.5">
                 {/* Provider */}
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">服务商</label>
+                  <label className="text-xs text-zinc-400">服务商</label>
                   <select
                     value={cloudConfig.provider}
                     onChange={(e) => handleProviderChange(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="flex h-9 w-full rounded-lg border border-zinc-200 bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-400"
                   >
                     {PROVIDERS.map((p) => (
                       <option key={p.value} value={p.value}>{p.label}</option>
@@ -267,74 +267,74 @@ export default function Settings({ onBack, onDataChanged }: Props) {
 
                 {/* Endpoint */}
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Endpoint (S3 兼容端点)</label>
+                  <label className="text-xs text-zinc-400">Endpoint (S3 兼容端点)</label>
                   <input
                     value={cloudConfig.endpoint}
                     onChange={(e) => updateCloudField("endpoint", e.target.value)}
                     placeholder={PROVIDER_PLACEHOLDERS[cloudConfig.provider]?.endpoint}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="flex h-9 w-full rounded-lg border border-zinc-200 bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-400"
                   />
                 </div>
 
                 {/* Region */}
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Region (区域)</label>
+                  <label className="text-xs text-zinc-400">Region (区域)</label>
                   <input
                     value={cloudConfig.region}
                     onChange={(e) => updateCloudField("region", e.target.value)}
                     placeholder={PROVIDER_PLACEHOLDERS[cloudConfig.provider]?.region}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="flex h-9 w-full rounded-lg border border-zinc-200 bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-400"
                   />
                 </div>
 
                 {/* Bucket */}
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Bucket (存储空间名)</label>
+                  <label className="text-xs text-zinc-400">Bucket (存储空间名)</label>
                   <input
                     value={cloudConfig.bucket}
                     onChange={(e) => updateCloudField("bucket", e.target.value)}
                     placeholder="my-images"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="flex h-9 w-full rounded-lg border border-zinc-200 bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-400"
                   />
                 </div>
 
                 {/* Access Key */}
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">AccessKey</label>
+                  <label className="text-xs text-zinc-400">AccessKey</label>
                   <input
                     value={cloudConfig.access_key}
                     onChange={(e) => updateCloudField("access_key", e.target.value)}
                     placeholder="输入 AccessKey"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"
+                    className="flex h-9 w-full rounded-lg border border-zinc-200 bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-400 font-mono"
                   />
                 </div>
 
                 {/* Secret Key */}
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">SecretKey</label>
+                  <label className="text-xs text-zinc-400">SecretKey</label>
                   <input
                     type="password"
                     value={cloudConfig.secret_key}
                     onChange={(e) => updateCloudField("secret_key", e.target.value)}
                     placeholder="输入 SecretKey"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"
+                    className="flex h-9 w-full rounded-lg border border-zinc-200 bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-400 font-mono"
                   />
                 </div>
 
                 {/* Domain */}
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Domain (公网访问域名)</label>
+                  <label className="text-xs text-zinc-400">Domain (公网访问域名)</label>
                   <input
                     value={cloudConfig.domain}
                     onChange={(e) => updateCloudField("domain", e.target.value)}
                     placeholder={PROVIDER_PLACEHOLDERS[cloudConfig.provider]?.domain}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="flex h-9 w-full rounded-lg border border-zinc-200 bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-400"
                   />
                 </div>
 
                 <Button
                   size="sm"
-                  className="mt-2"
+                  className="mt-2 bg-gradient-to-r from-violet-500 to-indigo-500 text-white shadow-sm hover:shadow-md"
                   onClick={handleSaveCloud}
                   disabled={savingCloud}
                 >
@@ -346,8 +346,8 @@ export default function Settings({ onBack, onDataChanged }: Props) {
         )}
 
         {/* ── 数据导入导出 ── */}
-        <div className="rounded-lg border border-border p-4 bg-card">
-          <p className="text-sm font-medium mb-3">数据管理</p>
+        <div className="rounded-xl border border-zinc-200/70 p-4 bg-white shadow-card">
+          <p className="text-sm font-medium text-zinc-800 mb-3">数据管理</p>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={handleExport} disabled={exporting}>
               {exporting ? "导出中…" : "导出数据"}
@@ -356,20 +356,23 @@ export default function Settings({ onBack, onDataChanged }: Props) {
               {importing ? "导入中…" : "导入数据"}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className="text-xs text-zinc-400 mt-2">
             导出为 JSON 格式，支持导入备份和跨设备迁移
           </p>
         </div>
 
         {msg && (
-          <p className={`text-sm ${msgType === "error" ? "text-destructive" : msgType === "success" ? "text-green-600" : "text-muted-foreground"}`}>
+          <p className={`text-sm px-3 py-2 rounded-lg ${msgType === "error" ? "bg-red-50 text-red-600 border border-red-200" :
+              msgType === "success" ? "bg-emerald-50 text-emerald-600 border border-emerald-200" :
+                "text-zinc-400"
+            }`}>
             {msg}
           </p>
         )}
       </div>
 
-      <div className="pt-6 text-center text-xs text-muted-foreground">
-        <p>QuickKit v0.1.1 &middot; 基于 Tauri + Rust</p>
+      <div className="pt-6 text-center text-xs text-zinc-400">
+        <p>QuickKit v0.1.1</p>
       </div>
     </div>
   );
