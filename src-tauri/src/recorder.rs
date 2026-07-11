@@ -35,10 +35,22 @@ pub fn start_recording(
     let mon_w = monitor.width().map_err(|e| e.to_string())? as i32;
     let mon_h = monitor.height().map_err(|e| e.to_string())? as i32;
     println!("显示器: {}x{} 偏移({},{})", mon_w, mon_h, mon_x, mon_y);
-    let rel_x = region.x - mon_x;
-    let rel_y = region.y - mon_y;
-    let crop_w = region.w.min(mon_w - rel_x);
-    let crop_h = region.h.min(mon_h - rel_y);
+
+    // 获取 DPI 缩放系数，将逻辑像素选区转为物理像素（用于 DXGI 捕获帧的 crop）
+    let scale = monitor.scale_factor().map_err(|e| e.to_string())?;
+    println!("DPI 缩放: {} ({}%)", scale, (scale * 100.0) as i32);
+    let phys_x = (region.x as f32 * scale) as i32;
+    let phys_y = (region.y as f32 * scale) as i32;
+    let phys_w = (region.w as f32 * scale) as i32;
+    let phys_h = (region.h as f32 * scale) as i32;
+    println!("逻辑区域: {}x{}+({},{})  物理区域: {}x{}+({},{})",
+        region.w, region.h, region.x, region.y,
+        phys_w, phys_h, phys_x, phys_y);
+
+    let rel_x = phys_x - mon_x;
+    let rel_y = phys_y - mon_y;
+    let crop_w = phys_w.min(mon_w - rel_x);
+    let crop_h = phys_h.min(mon_h - rel_y);
     println!(
         "裁剪区域: rel({},{}) size({},{})",
         rel_x, rel_y, crop_w, crop_h

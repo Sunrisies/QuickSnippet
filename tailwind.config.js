@@ -4,6 +4,7 @@ export default {
     "./index.html",
     "./quicklaunch.html",
     "./src/**/*.{ts,tsx}",
+    "./recording-frame.html"
   ],
   theme: {
     extend: {

@@ -4,7 +4,6 @@ mod db;
 mod executor;
 mod recorder;
 mod uploader;
-
 use db::{CloudConfig, Database, Folder, Script, UploadRecord};
 use executor::ExecutionResult;
 use serde::{Deserialize, Serialize};
@@ -18,6 +17,7 @@ use tauri::{
 use tauri_plugin_global_shortcut::{
     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState as GsState,
 };
+use tauri_plugin_polygon::PolygonExt;
 
 // ============ 快捷键管理 ============
 
@@ -782,14 +782,20 @@ fn open_recording_frame(
             let _ = w.close();
         }
 
+        const CONTROLBAR_HEIGHT: f64 = 48.0;
+        const PAD: f64 = 4.0; // 角标和虚线的边距
+
         match tauri::WebviewWindowBuilder::new(
             &app,
             "recording_frame",
             tauri::WebviewUrl::App("recording-frame.html".into()),
         )
         .title("")
-        .position(region.x as f64, region.y as f64)
-        .inner_size(region.w as f64, region.h as f64)
+        .position((region.x as f64) - PAD, (region.y as f64) - PAD)
+        .inner_size(
+            (region.w as f64) + PAD * 2.0,
+            (region.h as f64) + PAD * 2.0 + CONTROLBAR_HEIGHT,
+        )
         .decorations(false)
         .transparent(true)
         .always_on_top(true)
@@ -800,6 +806,7 @@ fn open_recording_frame(
         {
             Ok(window) => {
                 // window.open_devtools();
+                window.set_ignore_cursor_events(true);
                 println!("录制窗口创建成功");
             }
             Err(e) => {
@@ -809,19 +816,6 @@ fn open_recording_frame(
     });
     Ok(())
 }
-
-// #[tauri::command]
-// async fn start_recording(
-//     app: tauri::AppHandle, // 添加 app 参数，以便发送事件
-//     state: tauri::State<'_, recorder::RecordingSession>,
-//     region_state: tauri::State<'_, RegionState>,
-// ) -> Result<String, String> {
-//     let region = region_state.region.lock().map_err(|e| e.to_string())?;
-//     let region = region.as_ref().ok_or("请先框选录制区域 (Ctrl+Shift+R)")?;
-//     let handle = recorder::start_recording(region)?;
-//     *state.handle.lock().map_err(|e| e.to_string())? = Some(handle);
-//     Ok("录制已开始".to_string())
-// }
 
 #[tauri::command]
 async fn start_recording(app: tauri::AppHandle) -> Result<(), String> {

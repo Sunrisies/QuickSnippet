@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import "../index.css";
 
 type Status = "idle" | "recording" | "error";
 
@@ -20,6 +21,10 @@ function fmt(sec: number) {
   const s = sec % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
+
+const PAD = 30;   // 与 lib.rs 中的 PAD 保持一致
+const CORNER = 30; // 角标尺寸
+const BAR_H = 48;  // 底部控制栏高度
 
 export default function RecordingFrame() {
   const [status, setStatus] = useState<Status>("idle");
@@ -70,68 +75,110 @@ export default function RecordingFrame() {
     getCurrentWebviewWindow().close();
   }, []);
 
+  const isRecording = status === "recording";
+  const clr = isRecording ? "#ef4444" : "#7c3aed";
+
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      {/* 四边边框 */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: status === "recording" ? "linear-gradient(90deg, #ef4444, #f97316)" : "linear-gradient(90deg, #7c3aed, #6366f1)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "2px", background: status === "recording" ? "linear-gradient(90deg, #f97316, #ef4444)" : "linear-gradient(90deg, #6366f1, #7c3aed)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "2px", background: status === "recording" ? "linear-gradient(180deg, #ef4444, #f97316)" : "linear-gradient(180deg, #7c3aed, #6366f1)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: "2px", background: status === "recording" ? "linear-gradient(180deg, #f97316, #ef4444)" : "linear-gradient(180deg, #6366f1, #7c3aed)", pointerEvents: "none" }} />
+    <div style={{
+      width: "100%", height: "100%", position: "relative",
+    }}
+      className="border border-red-400"
 
-      {/* 录制中 → 顶部计时器 */}
-      {status === "recording" && (
+    >
+      <div
+        className="border border-black-400 absolute"> {/* 录制区域 — 纯透明，无 UI 元素，位于 PAD 边距内 */}
+        < div style={{
+          position: "absolute",
+          top: PAD, left: PAD, right: PAD, bottom: PAD + BAR_H,
+        }
+        }>
+          {/* 错误提示 */}
+          {
+            status === "error" && (
+              <div style={{
+                position: "absolute", top: "6px", left: "50%", transform: "translateX(-50%)",
+                background: "rgba(239,68,68,0.9)", color: "#fff",
+                borderRadius: "8px", padding: "4px 12px",
+                fontSize: "11px", zIndex: 10,
+              }}>
+                {errorMsg}
+              </div>
+            )
+          }
+        </div >
+
+        {/* 左上角 — 右/下臂朝录制区 */}
         <div style={{
-          position: "absolute", top: "6px", left: "50%", transform: "translateX(-50%)",
-          background: "rgba(239,68,68,0.9)", color: "#fff",
-          borderRadius: "20px", padding: "2px 10px",
-          fontSize: "11px", fontWeight: 600, fontFamily: "monospace",
-          display: "flex", alignItems: "center", gap: "5px",
-          zIndex: 10,
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", display: "inline-block" }} />
-          {fmt(elapsed)}
-        </div>
-      )}
-
-      {/* 错误提示 */}
-      {status === "error" && (
+          position: "absolute", top: PAD - CORNER, left: PAD - CORNER,
+          width: CORNER, height: CORNER,
+          borderTop: "4px solid", borderLeft: "4px solid",
+          borderColor: clr, pointerEvents: "none",
+        }} />
+        {/* 右上角 */}
         <div style={{
-          position: "absolute", top: "6px", left: "50%", transform: "translateX(-50%)",
-          background: "rgba(239,68,68,0.9)", color: "#fff",
-          borderRadius: "8px", padding: "4px 12px",
-          fontSize: "11px", zIndex: 10,
-        }}>
-          {errorMsg}
-        </div>
-      )}
+          position: "absolute", top: PAD - CORNER, right: PAD - CORNER,
+          width: CORNER, height: CORNER,
+          borderTop: "4px solid", borderRight: "4px solid",
+          borderColor: clr, pointerEvents: "none",
+        }} />
+        {/* 左下角 — right/up 朝录制区 */}
+        <div style={{
+          position: "absolute", bottom: PAD + BAR_H - CORNER, left: PAD - CORNER,
+          width: CORNER, height: CORNER,
+          borderBottom: "4px solid", borderLeft: "4px solid",
+          borderColor: clr, pointerEvents: "none",
+        }} />
+        {/* 右下角 */}
+        <div style={{
+          position: "absolute", bottom: PAD + BAR_H - CORNER, right: PAD - CORNER,
+          width: CORNER, height: CORNER,
+          borderBottom: "4px solid", borderRight: "4px solid",
+          borderColor: clr, pointerEvents: "none",
+        }} />
 
-      {/* 底部操作栏 */}
+        <div className="border border-red-400 left-[4px] absolute"></div>
+
+      </div>
+
+
+      {/* 底部控制栏 */}
       <div style={{
-        position: "absolute", bottom: "8px", left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: "8px",
-        background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)",
-        borderRadius: "12px", padding: "8px 12px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-        border: "1px solid #e4e4e7",
-        zIndex: 10,
+        position: "absolute", bottom: 0, left: 0, right: 0,
+        height: BAR_H,
+        background: "rgba(0,0,0,0.3)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        gap: "8px", padding: "0 12px",
       }}>
-        <button style={{ ...btn, color: "#52525b", background: "transparent" }}
+        <button style={{ ...btn, color: "rgba(255,255,255,0.7)", background: "transparent" }}
           onClick={handleReselect}>重新规划</button>
-        <div style={{ width: "1px", height: "16px", background: "#e4e4e7" }} />
+        <div style={{ width: "1px", height: "16px", background: "rgba(255,255,255,0.15)" }} />
 
         {status === "recording" ? (
-          <button style={{ ...btn, color: "#fff", background: "linear-gradient(90deg, #ef4444, #dc2626)" }}
+          <button style={{
+            ...btn, color: "#fff",
+            background: "linear-gradient(90deg, #ef4444, #dc2626)",
+            display: "flex", alignItems: "center", gap: "6px",
+          }}
             onClick={handleStop}>
-            ■ 停止录制
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", display: "inline-block" }} />
+            {fmt(elapsed)}
+            <span style={{ fontWeight: 600 }}>停止</span>
           </button>
         ) : (
-          <button style={{ ...btn, color: "#fff", background: status === "error" ? "linear-gradient(90deg, #a1a1aa, #a1a1aa)" : "linear-gradient(90deg, #7c3aed, #6366f1)" }}
+          <button style={{
+            ...btn, color: "#fff",
+            background: status === "error"
+              ? "linear-gradient(90deg, #52525b, #52525b)"
+              : "linear-gradient(90deg, #7c3aed, #6366f1)",
+          }}
             disabled={status === "error"}
             onClick={handleStart}>
             {status === "error" ? "出错" : "开始录制"}
           </button>
         )}
       </div>
-    </div>
+    </div >
   );
 }
