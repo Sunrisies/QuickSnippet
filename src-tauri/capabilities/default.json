@@ -2,9 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": ["main", "quicklaunch", "region_selector", "recording_frame", "splash"],
   "permissions": [
     "core:default",
+    "core:event:default",
     "opener:default",
     "shell:default",
     "shell:allow-execute",

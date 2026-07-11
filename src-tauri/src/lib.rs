@@ -766,8 +766,15 @@ fn close_region_selector(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_recording_frame(app: tauri::AppHandle, region: ScreenRegion) -> Result<(), String> {
-    println!("打开录制框{:?}", region);
+fn open_recording_frame(
+    app: tauri::AppHandle,
+    region: ScreenRegion,
+    rstate: tauri::State<'_, RegionState>,
+) -> Result<(), String> {
+    // 兜底保存区域（确保 start_recording 能读到）
+    if let Ok(mut r) = rstate.region.lock() {
+        *r = Some(region.clone());
+    }
     tauri::async_runtime::spawn(async move {
         // 关闭选区窗口
         if let Some(w) = app.get_webview_window("region_selector") {
@@ -781,20 +788,18 @@ fn open_recording_frame(app: tauri::AppHandle, region: ScreenRegion) -> Result<(
             tauri::WebviewUrl::App("recording-frame.html".into()),
         )
         .title("")
-        .position(100.0, 100.0)
-        .inner_size(800.0, 600.0)
-        // .position(region.x as f64, region.y as f64)
-        // .inner_size(region.w as f64, region.h as f64)
+        .position(region.x as f64, region.y as f64)
+        .inner_size(region.w as f64, region.h as f64)
         .decorations(false)
-        // .transparent(true)
-        // .always_on_top(true)
-        // .skip_taskbar(false)
-        // .shadow(false)
-        // .devtools(true)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(false)
+        .shadow(false)
+        .devtools(true)
         .build()
         {
             Ok(window) => {
-                window.open_devtools();
+                // window.open_devtools();
                 println!("录制窗口创建成功");
             }
             Err(e) => {
@@ -805,28 +810,95 @@ fn open_recording_frame(app: tauri::AppHandle, region: ScreenRegion) -> Result<(
     Ok(())
 }
 
+// #[tauri::command]
+// async fn start_recording(
+//     app: tauri::AppHandle, // 添加 app 参数，以便发送事件
+//     state: tauri::State<'_, recorder::RecordingSession>,
+//     region_state: tauri::State<'_, RegionState>,
+// ) -> Result<String, String> {
+//     let region = region_state.region.lock().map_err(|e| e.to_string())?;
+//     let region = region.as_ref().ok_or("请先框选录制区域 (Ctrl+Shift+R)")?;
+//     let handle = recorder::start_recording(region)?;
+//     *state.handle.lock().map_err(|e| e.to_string())? = Some(handle);
+//     Ok("录制已开始".to_string())
+// }
+
 #[tauri::command]
-fn start_recording(
-    state: tauri::State<'_, recorder::RecordingSession>,
-    region_state: tauri::State<'_, RegionState>,
-) -> Result<String, String> {
-    let region = region_state.region.lock().map_err(|e| e.to_string())?;
-    let region = region.as_ref().ok_or("请先框选录制区域 (Ctrl+Shift+R)")?;
-    let handle = recorder::start_recording(region)?;
-    *state.handle.lock().map_err(|e| e.to_string())? = Some(handle);
-    Ok("录制已开始".to_string())
+async fn start_recording(app: tauri::AppHandle) -> Result<(), String> {
+    let app_clone = app.clone();
+    println!("开始录制");
+    tauri::async_runtime::spawn(async move {
+        // 在异步闭包内部通过 app 获取状态
+        let region_state = app_clone.state::<RegionState>();
+        let recording_session = app_clone.state::<recorder::RecordingSession>();
+        // 在异步块内部获取锁，避免锁跨越 await 点
+        let region_opt = {
+            //     // 使用 block 来限制锁的作用域
+            let guard = match region_state.region.lock() {
+                Ok(g) => g,
+                Err(e) => {
+                    // PoisonError：持锁线程 panic，但我们可以继续使用数据
+                    // 这里可以选择恢复或报告错误
+                    let _ = app_clone.emit("recording-error", format!("锁错误: {}", e));
+                    return;
+                }
+            };
+            guard.clone()
+        };
+
+        let region = match region_opt {
+            Some(r) => r,
+            None => {
+                let _ = app_clone.emit("recording-error", "请先框选录制区域");
+                return;
+            }
+        };
+        println!("开始录制: {:?}", region);
+        // 执行耗时的录制启动
+        match recorder::start_recording(&region) {
+            Ok(handle) => {
+                // 存入状态
+                if let Ok(mut guard) = recording_session.handle.lock() {
+                    *guard = Some(handle);
+                }
+                let _ = app_clone.emit("recording-started", ());
+            }
+            Err(e) => {
+                let _ = app_clone.emit("recording-error", format!("启动录制失败: {}", e));
+            }
+        }
+    });
+
+    // 立即返回，不等待异步任务
+    Ok(())
 }
 
 #[tauri::command]
-fn stop_recording(state: tauri::State<'_, recorder::RecordingSession>) -> Result<String, String> {
+async fn stop_recording(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, recorder::RecordingSession>,
+) -> Result<(), String> {
     let mut handle = state
         .handle
         .lock()
         .map_err(|e| e.to_string())?
         .take()
         .ok_or("没有正在进行的录制")?;
-    let path = recorder::stop_recording(&mut handle)?;
-    Ok(path)
+
+    // 把阻塞操作放到后台线程，不阻塞主线程
+    let app2 = app.clone();
+    tauri::async_runtime::spawn(async move {
+        match recorder::stop_recording(&mut handle) {
+            Ok(path) => {
+                let _ = app2.emit("recording-stopped", &path);
+            }
+            Err(e) => {
+                let _ = app2.emit("recording-error", format!("停止录制失败: {}", e));
+            }
+        }
+    });
+
+    Ok(())
 }
 
 /// 获取主屏幕尺寸
